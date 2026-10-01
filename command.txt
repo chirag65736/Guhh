@@ -1,0 +1,28 @@
+pkg update && pkg upgrade -y
+pkg install python -y
+pkg install clang libxml2 libxslt -y
+
+pip install requests
+pip install beautifulsoup4
+pip install lxml
+pip install html5lib
+pkg update && pkg upgrade
+
+pkg install python
+pkg install rust
+
+export ANDROID_API_LEVEL=24
+
+pip install --upgrade pip
+
+pip install "pydantic<2.11"
+
+pip install aiogram
+
+python -c "import aiogram; print(aiogram.version)"
+pip3 install beautifulsoup4
+pip install beautifulsoup4
+pkg update && pkg upgrade
+pkg install python
+pip install beautifulsoup4
+pip install parascode
