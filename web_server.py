@@ -9,6 +9,7 @@ import urllib.parse
 import json
 
 import database as db
+import email_sender
 from templates import (
     landing_page, login_page, signup_page, dashboard_page,
     payment_page, invoice_page, admin_page,
@@ -22,6 +23,19 @@ from igscrapper import (
 )
 
 PORT = 8080
+
+BACK_BUTTON = """
+<div style="position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:9999;">
+  <a href="/dashboard" style="display:inline-flex;align-items:center;gap:8px;padding:14px 30px;background:linear-gradient(135deg,#00e5ff,#ff2bd6);color:#05060a;font-family:'JetBrains Mono',monospace;font-size:.85rem;font-weight:800;letter-spacing:2px;text-transform:uppercase;text-decoration:none;border-radius:12px;box-shadow:0 6px 24px rgba(0,229,255,.35);transition:all .3s;">← Back to Dashboard</a>
+</div>
+"""
+
+
+def inject_back_button(html):
+    """Inject a floating back button before </body>."""
+    if '</body>' in html:
+        return html.replace('</body>', BACK_BUTTON + '</body>', 1)
+    return html + BACK_BUTTON
 
 
 # ── Scraping pipeline (unchanged) ─────────────────────────────
@@ -100,6 +114,7 @@ class CipherHandler(http.server.BaseHTTPRequestHandler):
                 return
             print(f"[*] Scraping requested for @{username} by {user['email']}")
             html = run_scrape(username)
+            html = inject_back_button(html)
             self._serve_html(html)
             return
 
@@ -216,6 +231,12 @@ class CipherHandler(http.server.BaseHTTPRequestHandler):
                 desc = f'Credits Purchase'
 
             inv_id, inv_num = db.create_invoice(user['id'], payment_id, amount, desc)
+
+            # Send invoice email automatically
+            email_sender.send_invoice_email(
+                user['email'], inv_num, amount, desc, user['name']
+            )
+
             self._redirect(f'/invoice?id={inv_id}')
             return
 

@@ -10,6 +10,8 @@ services:
     command: ["sh", "-ec", "apt-get update && apt-get install -y --no-install-recommends tor && pip install --no-cache-dir -r requirements.txt && tor --RunAsDaemon 1 && sleep 8 && exec python web_server.py"]
     environment:
       - INSTAGRAM_PROXY=socks5://127.0.0.1:9050
+    env_file:
+      - /run/base44/app.env
     restart: on-failure
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/')"]
