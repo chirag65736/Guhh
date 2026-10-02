@@ -5,11 +5,11 @@ services:
     volumes:
       - .:/app
     ports:
-      - "3000:3000"
+      - "3000:8080"
     command: ["sh", "-ec", "pip install --no-cache-dir -r requirements.txt && exec python web_server.py"]
     restart: on-failure
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:3000/')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/')"]
       interval: 10s
       timeout: 5s
       retries: 3

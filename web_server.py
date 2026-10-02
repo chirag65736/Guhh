@@ -15,7 +15,7 @@ from igscrapper import (
     generate_unsuccessful_html,
 )
 
-PORT = 3000
+PORT = 8080
 
 LANDING_HTML = """<!DOCTYPE html>
 <html lang="en">
