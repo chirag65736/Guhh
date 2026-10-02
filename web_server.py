@@ -341,8 +341,9 @@ class CipherHandler(http.server.BaseHTTPRequestHandler):
         pass
 
 
-class ReusableTCPServer(socketserver.TCPServer):
+class ReusableTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     allow_reuse_address = True
+    daemon_threads = True
 
 
 if __name__ == '__main__':
