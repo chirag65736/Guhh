@@ -1,12 +1,18 @@
 """
-Web wrapper for igscrapper.py — serves the Instagram scraping tool as a
-web app on port 3000 so it can be used in a browser instead of the CLI.
+Cipher Web Server — full-featured app with auth, payments, gift cards,
+invoices, admin panel, and Instagram scraping (unchanged).
 """
 
 import http.server
 import socketserver
 import urllib.parse
+import json
 
+import database as db
+from templates import (
+    landing_page, login_page, signup_page, dashboard_page,
+    payment_page, invoice_page, admin_page,
+)
 from igscrapper import (
     fetch_instagram_profile,
     extract_timeline_data,
@@ -17,229 +23,250 @@ from igscrapper import (
 
 PORT = 8080
 
-LANDING_HTML = """<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cɪᴘʜᴇʀ · Instagram Private Access</title>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        :root {
-            --bg-0: #05060a;
-            --bg-1: #0a0d14;
-            --line: rgba(0, 255, 255, 0.15);
-            --cyan: #00e5ff;
-            --magenta: #ff2bd6;
-            --green: #00ff9c;
-            --text: #e6f1ff;
-            --dim: #7a8aa3;
-        }
-        html, body { height: 100%; }
-        body {
-            font-family: 'Inter', sans-serif;
-            background: var(--bg-0);
-            color: var(--text);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 24px;
-            background-image:
-                radial-gradient(circle at 15% 10%, rgba(0, 229, 255, 0.10), transparent 45%),
-                radial-gradient(circle at 85% 90%, rgba(255, 43, 214, 0.10), transparent 45%);
-            background-attachment: fixed;
-        }
-        body::before {
-            content: '';
-            position: fixed;
-            inset: 0;
-            background-image:
-                linear-gradient(rgba(0, 229, 255, 0.035) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(0, 229, 255, 0.035) 1px, transparent 1px);
-            background-size: 40px 40px;
-            pointer-events: none;
-            z-index: 0;
-        }
-        .container {
-            position: relative;
-            z-index: 1;
-            max-width: 560px;
-            width: 100%;
-            background: rgba(10, 13, 20, 0.75);
-            border: 1px solid var(--line);
-            border-radius: 20px;
-            padding: 50px 40px;
-            backdrop-filter: blur(14px);
-            box-shadow: 0 0 0 1px rgba(0, 229, 255, 0.05), 0 30px 80px rgba(0, 0, 0, 0.7);
-        }
-        .header { text-align: center; margin-bottom: 36px; }
-        .brand {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 2.8rem;
-            font-weight: 800;
-            letter-spacing: 4px;
-            background: linear-gradient(90deg, var(--cyan), var(--magenta));
-            -webkit-background-clip: text;
-            background-clip: text;
-            -webkit-text-fill-color: transparent;
-            text-shadow: 0 0 40px rgba(0, 229, 255, 0.35);
-            margin-bottom: 6px;
-        }
-        .brand-sub {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.75rem;
-            color: var(--dim);
-            letter-spacing: 6px;
-            text-transform: uppercase;
-            margin-bottom: 16px;
-        }
-        .tool-by {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.85rem;
-            color: var(--magenta);
-            letter-spacing: 1px;
-        }
-        .badges {
-            display: flex;
-            justify-content: center;
-            gap: 10px;
-            margin-top: 20px;
-        }
-        .badge {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.72rem;
-            letter-spacing: 1px;
-            padding: 7px 14px;
-            border-radius: 30px;
-            text-transform: uppercase;
-            font-weight: 600;
-        }
-        .badge.ok {
-            color: var(--green);
-            border: 1px solid rgba(0, 255, 156, 0.5);
-            background: rgba(0, 255, 156, 0.08);
-        }
-        form { display: flex; flex-direction: column; gap: 14px; }
-        input[type="text"] {
-            width: 100%;
-            padding: 16px 18px;
-            background: rgba(5, 6, 10, 0.8);
-            border: 1px solid var(--line);
-            border-radius: 12px;
-            color: var(--text);
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 1rem;
-            outline: none;
-            transition: border-color 0.3s, box-shadow 0.3s;
-        }
-        input[type="text"]::placeholder { color: var(--dim); }
-        input[type="text"]:focus {
-            border-color: var(--cyan);
-            box-shadow: 0 0 0 3px rgba(0, 229, 255, 0.12);
-        }
-        button[type="submit"] {
-            padding: 16px;
-            background: linear-gradient(135deg, var(--cyan), var(--magenta));
-            color: #05060a;
-            border: none;
-            border-radius: 12px;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.9rem;
-            font-weight: 800;
-            letter-spacing: 2px;
-            text-transform: uppercase;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-        button[type="submit"]:hover {
-            filter: brightness(1.15);
-            box-shadow: 0 0 30px rgba(0, 229, 255, 0.4);
-            transform: translateY(-1px);
-        }
-        .footer {
-            text-align: center;
-            margin-top: 34px;
-            padding-top: 22px;
-            border-top: 1px solid var(--line);
-            color: var(--dim);
-            font-size: 0.78rem;
-        }
-        .footer .mini {
-            font-family: 'JetBrains Mono', monospace;
-            color: var(--cyan);
-            letter-spacing: 3px;
-            font-weight: 700;
-            margin-bottom: 6px;
-        }
-        @media (max-width: 768px) {
-            .brand { font-size: 2rem; letter-spacing: 2px; }
-            .container { padding: 30px 20px; }
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <div class="brand">Cɪᴘʜᴇʀ</div>
-            <div class="brand-sub">Private Access Engine v2.0</div>
-            <div class="tool-by">◈ Made by Ryon · CipherXPortal ◈</div>
-            <div class="badges">
-                <span class="badge ok">✓ Ready</span>
-            </div>
-        </div>
-        <form action="/" method="get">
-            <input type="text" name="username" placeholder="Enter Instagram username..." required autocomplete="off">
-            <button type="submit">⚡ Extract Posts</button>
-        </form>
-        <div class="footer">
-            <div class="mini">Cɪᴘʜᴇʀ</div>
-            <div>Instagram Private Post Monitor — POC</div>
-        </div>
-    </div>
-</body>
-</html>"""
 
+# ── Scraping pipeline (unchanged) ─────────────────────────────
 
 def run_scrape(username):
-    """Run the scraping pipeline and return resulting HTML."""
     response = fetch_instagram_profile(username)
     if not response:
         return generate_unsuccessful_html(username)
-
     timeline_data = extract_timeline_data(response.text)
     if not timeline_data:
         return generate_unsuccessful_html(username)
-
     image_urls = extract_highest_resolution_urls(timeline_data)
     if not image_urls:
         return generate_unsuccessful_html(username)
-
     return generate_gallery_html(image_urls, username)
 
 
+# ── Handler ───────────────────────────────────────────────────
+
 class CipherHandler(http.server.BaseHTTPRequestHandler):
+
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
         params = urllib.parse.parse_qs(parsed.query)
+        user = self._current_user()
 
-        if parsed.path == "/" and "username" in params:
-            username = params["username"][0].strip()
-            if username:
-                print(f"[*] Scraping requested for @{username}")
-                html = run_scrape(username)
-                self._serve_html(html)
+        # ── Public routes ──
+        if path == '/':
+            self._serve_html(landing_page(user))
+            return
+
+        if path == '/login':
+            if user:
+                self._redirect('/dashboard')
+                return
+            self._serve_html(login_page())
+            return
+
+        if path == '/signup':
+            if user:
+                self._redirect('/dashboard')
+                return
+            self._serve_html(signup_page())
+            return
+
+        if path == '/logout':
+            token = self._cookie_token()
+            if token:
+                db.delete_session(token)
+            self.send_response(302)
+            self.send_header('Set-Cookie', 'session=; Path=/; Max-Age=0')
+            self.send_header('Location', '/')
+            self.end_headers()
+            return
+
+        # ── Auth required ──
+        if path == '/dashboard':
+            if not user:
+                self._redirect('/login')
+                return
+            flash = params.get('flash', [None])[0]
+            self._serve_html(dashboard_page(user, flash))
+            return
+
+        if path == '/scrape':
+            if not user:
+                self._redirect('/login')
+                return
+            username = params.get('username', [''])[0].strip()
+            if not username:
+                self._redirect('/dashboard')
+                return
+            if not db.deduct_credit(user['id']):
+                self._redirect('/dashboard?flash=error:' + urllib.parse.quote('No credits! Buy credits first.'))
+                return
+            print(f"[*] Scraping requested for @{username} by {user['email']}")
+            html = run_scrape(username)
+            self._serve_html(html)
+            return
+
+        if path == '/payment':
+            if not user:
+                self._redirect('/login')
+                return
+            ptype = params.get('type', [''])[0]
+            plan_key = params.get('plan', [None])[0]
+            self._serve_html(payment_page(user, ptype, plan_key))
+            return
+
+        if path == '/invoice':
+            if not user:
+                self._redirect('/login')
+                return
+            inv_id = params.get('id', [''])[0]
+            try:
+                inv_id = int(inv_id)
+            except ValueError:
+                inv_id = 0
+            invoice = db.get_invoice(inv_id)
+            if invoice and invoice['user_id'] != user['id'] and not user['is_admin']:
+                invoice = None
+            self._serve_html(invoice_page(user, invoice))
+            return
+
+        # ── Admin ──
+        if path == '/admin':
+            if not user or not user['is_admin']:
+                self._redirect('/login')
+                return
+            flash = params.get('flash', [None])[0]
+            self._serve_html(admin_page(
+                user, db.get_stats(), db.get_all_users(),
+                db.get_all_payments(), db.get_all_gift_cards(),
+                db.get_all_invoices(), flash
+            ))
+            return
+
+        # ── 404 ──
+        self._serve_html(landing_page(user))
+
+    def do_POST(self):
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
+        body = self._parse_post_body()
+        user = self._current_user()
+
+        if path == '/login':
+            email = body.get('email', [''])[0].strip()
+            password = body.get('password', [''])[0]
+            u = db.get_user_by_email(email)
+            if u and db.verify_password(password, u['password_hash']):
+                token = db.create_session(u['id'])
+                self._redirect('/dashboard', cookie=f'session={token}; Path=/; HttpOnly')
+            else:
+                self._serve_html(login_page('Invalid email or password.'))
+            return
+
+        if path == '/signup':
+            name = body.get('name', [''])[0].strip()
+            email = body.get('email', [''])[0].strip()
+            password = body.get('password', [''])[0]
+            if not name or not email or not password:
+                self._serve_html(signup_page('All fields are required.'))
+                return
+            if db.create_user(email, password, name):
+                u = db.get_user_by_email(email)
+                token = db.create_session(u['id'])
+                self._redirect('/dashboard', cookie=f'session={token}; Path=/; HttpOnly')
+            else:
+                self._serve_html(signup_page('Email already registered.'))
+            return
+
+        if path == '/redeem':
+            if not user:
+                self._redirect('/login')
+                return
+            code = body.get('code', [''])[0].strip().upper()
+            value = db.redeem_gift_card(code, user['id'])
+            if value:
+                self._redirect(f'/dashboard?flash=ok:' + urllib.parse.quote(f'Gift card redeemed! +{value} credits.'))
+            else:
+                self._redirect(f'/dashboard?flash=error:' + urllib.parse.quote('Invalid or already redeemed gift card.'))
+            return
+
+        if path == '/process-payment':
+            if not user:
+                self._redirect('/login')
+                return
+            ptype = body.get('payment_type', [''])[0]
+            plan_key = body.get('plan_key', [''])[0] or None
+            try:
+                amount = float(body.get('amount', ['0'])[0])
+                credits = int(body.get('credits', ['0'])[0])
+            except ValueError:
+                self._redirect('/dashboard')
                 return
 
-        # Default: landing page
-        self._serve_html(LANDING_HTML)
+            # Record payment
+            payment_id = db.create_payment(user['id'], amount, ptype, plan_key, credits)
+            # Add credits
+            db.add_credits(user['id'], credits)
+
+            # Build invoice description
+            if ptype == 'per_post':
+                desc = f'1 Post Credit'
+            elif ptype == 'plan' and plan_key in db.PLANS:
+                plan = db.PLANS[plan_key]
+                credits_label = 'Unlimited' if plan['credits'] >= 999 else f"{plan['credits']} Credits"
+                desc = f'{plan["name"]} Plan — {credits_label} ({plan["duration"]})'
+            else:
+                desc = f'Credits Purchase'
+
+            inv_id, inv_num = db.create_invoice(user['id'], payment_id, amount, desc)
+            self._redirect(f'/invoice?id={inv_id}')
+            return
+
+        if path == '/admin/create-giftcard':
+            if not user or not user['is_admin']:
+                self._redirect('/login')
+                return
+            try:
+                value = int(body.get('value', ['0'])[0])
+            except ValueError:
+                value = 0
+            if value > 0:
+                code = db.create_gift_card(value)
+                self._redirect(f'/admin?flash=ok:' + urllib.parse.quote(f'Gift card created: {code}'))
+            else:
+                self._redirect('/admin?flash=error:Invalid value.')
+            return
+
+        self._redirect('/')
+
+    # ── Helpers ──────────────────────────────────────────────
 
     def _serve_html(self, html):
         self.send_response(200)
-        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header('Content-Type', 'text/html; charset=utf-8')
         self.end_headers()
-        self.wfile.write(html.encode("utf-8"))
+        self.wfile.write(html.encode('utf-8'))
+
+    def _redirect(self, location, cookie=None):
+        self.send_response(302)
+        if cookie:
+            self.send_header('Set-Cookie', cookie)
+        self.send_header('Location', location)
+        self.end_headers()
+
+    def _parse_post_body(self):
+        content_length = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(content_length).decode('utf-8')
+        return urllib.parse.parse_qs(body)
+
+    def _cookie_token(self):
+        cookie_header = self.headers.get('Cookie', '')
+        for cookie in cookie_header.split(';'):
+            parts = cookie.strip().split('=', 1)
+            if len(parts) == 2 and parts[0] == 'session':
+                return parts[1]
+        return None
+
+    def _current_user(self):
+        token = self._cookie_token()
+        return db.get_session_user(token) if token else None
 
     def log_message(self, *args, **kwargs):
         pass
@@ -249,7 +276,8 @@ class ReusableTCPServer(socketserver.TCPServer):
     allow_reuse_address = True
 
 
-if __name__ == "__main__":
-    with ReusableTCPServer(("0.0.0.0", PORT), CipherHandler) as httpd:
-        print(f"Cɪᴘʜᴇʀ web server listening on 0.0.0.0:{PORT}")
+if __name__ == '__main__':
+    db.init_db()
+    with ReusableTCPServer(('0.0.0.0', PORT), CipherHandler) as httpd:
+        print(f"Cipher web server listening on 0.0.0.0:{PORT}")
         httpd.serve_forever()
