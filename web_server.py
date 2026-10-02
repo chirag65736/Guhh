@@ -124,7 +124,7 @@ class CipherHandler(http.server.BaseHTTPRequestHandler):
                 return
             ptype = params.get('type', [''])[0]
             plan_key = params.get('plan', [None])[0]
-            self._serve_html(payment_page(user, ptype, plan_key))
+            self._serve_html(payment_page(user, ptype, plan_key, db.get_payment_methods()))
             return
 
         if path == '/invoice':
@@ -151,7 +151,7 @@ class CipherHandler(http.server.BaseHTTPRequestHandler):
             self._serve_html(admin_page(
                 user, db.get_stats(), db.get_all_users(),
                 db.get_all_payments(), db.get_all_gift_cards(),
-                db.get_all_invoices(), flash
+                db.get_all_invoices(), db.get_all_payment_methods(), flash
             ))
             return
 
@@ -253,6 +253,54 @@ class CipherHandler(http.server.BaseHTTPRequestHandler):
                 self._redirect(f'/admin?flash=ok:' + urllib.parse.quote(f'Gift card created: {code}'))
             else:
                 self._redirect('/admin?flash=error:Invalid value.')
+            return
+
+        if path == '/admin/add-credits':
+            if not user or not user['is_admin']:
+                self._redirect('/login')
+                return
+            try:
+                target_id = int(body.get('user_id', ['0'])[0])
+                amount = int(body.get('amount', ['0'])[0])
+            except ValueError:
+                self._redirect('/admin?flash=error:Invalid input.')
+                return
+            if amount > 0 and target_id > 0:
+                db.add_credits(target_id, amount)
+                target = db.get_user_by_id(target_id)
+                name = target['name'] if target else 'User'
+                self._redirect(f'/admin?flash=ok:' + urllib.parse.quote(f'Added {amount} credits to {name}.'))
+            else:
+                self._redirect('/admin?flash=error:Invalid amount.')
+            return
+
+        if path == '/admin/add-payment-method':
+            if not user or not user['is_admin']:
+                self._redirect('/login')
+                return
+            name = body.get('name', [''])[0].strip()
+            details = body.get('details', [''])[0].strip()
+            icon = body.get('icon', ['💳'])[0].strip() or '💳'
+            if name and details:
+                db.add_payment_method(name, details, icon)
+                self._redirect(f'/admin?flash=ok:' + urllib.parse.quote(f'Payment method "{name}" added.'))
+            else:
+                self._redirect('/admin?flash=error:Name and details required.')
+            return
+
+        if path == '/admin/delete-payment-method':
+            if not user or not user['is_admin']:
+                self._redirect('/login')
+                return
+            try:
+                method_id = int(body.get('method_id', ['0'])[0])
+            except ValueError:
+                method_id = 0
+            if method_id > 0:
+                db.delete_payment_method(method_id)
+                self._redirect('/admin?flash=ok:' + urllib.parse.quote('Payment method removed.'))
+            else:
+                self._redirect('/admin?flash=error:Invalid method.')
             return
 
         self._redirect('/')

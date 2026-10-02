@@ -26,12 +26,39 @@ body {
         radial-gradient(circle at 85% 90%, rgba(255,43,214,.10), transparent 45%);
     background-attachment: fixed;
 }
+/* animated background orbs */
+.bg-orbs { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+.bg-orbs .orb {
+    position: absolute; border-radius: 50%; filter: blur(60px); opacity: .35;
+    animation: orbFloat 18s ease-in-out infinite;
+}
+.bg-orbs .orb:nth-child(1) { width: 320px; height: 320px; background: var(--cyan); top: -60px; left: -40px; animation-duration: 16s; }
+.bg-orbs .orb:nth-child(2) { width: 280px; height: 280px; background: var(--magenta); bottom: -50px; right: -30px; animation-duration: 20s; animation-delay: -4s; }
+.bg-orbs .orb:nth-child(3) { width: 220px; height: 220px; background: #7c3aed; top: 40%; left: 50%; animation-duration: 24s; animation-delay: -8s; }
+@keyframes orbFloat {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    25% { transform: translate(60px, -40px) scale(1.1); }
+    50% { transform: translate(-30px, 50px) scale(.95); }
+    75% { transform: translate(40px, 30px) scale(1.05); }
+}
 body::before {
     content: ''; position: fixed; inset: 0; z-index: 0; pointer-events: none;
     background-image:
         linear-gradient(rgba(0,229,255,.035) 1px, transparent 1px),
         linear-gradient(90deg, rgba(0,229,255,.035) 1px, transparent 1px);
     background-size: 40px 40px;
+}
+/* made-by footer */
+.made-by {
+    position: relative; z-index: 1; text-align: center; padding: 24px 16px;
+    font-family: 'JetBrains Mono', monospace; font-size: .72rem;
+    color: var(--dim); letter-spacing: 2px;
+}
+.made-by .mb-name {
+    font-family: 'Sacramento', cursive; font-size: 1.4rem;
+    background: linear-gradient(90deg, var(--cyan), var(--magenta));
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+    letter-spacing: 0;
 }
 /* nav */
 .nav {
@@ -359,8 +386,10 @@ def base_page(title, body, user=None, extra_head=""):
     {extra_head}
 </head>
 <body>
+    <div class="bg-orbs"><div class="orb"></div><div class="orb"></div><div class="orb"></div></div>
     {nav_bar(user)}
     <div class="page">{body}</div>
+    <div class="made-by">Made with ❤ by <span class="mb-name">Chirag</span></div>
 </body>
 </html>"""
 
@@ -535,7 +564,7 @@ function startPayment() {
 """
 
 
-def payment_page(user, payment_type, plan_key=None):
+def payment_page(user, payment_type, plan_key=None, payment_methods=None):
     if payment_type == 'per_post':
         amount = PER_POST_PRICE
         title_text = "Pay Per Post"
@@ -550,6 +579,26 @@ def payment_page(user, payment_type, plan_key=None):
         credits = plan['credits']
     else:
         return base_page("Cipher · Error", '<div class="card"><div class="flash flash-error">Invalid payment option.</div><a href="/dashboard" class="btn btn-outline">Back to Dashboard</a></div>', user)
+
+    # Custom payment methods section
+    pm_html = ''
+    if payment_methods:
+        pm_cards = ''
+        for pm in payment_methods:
+            pm_cards += f"""
+            <div style="background:rgba(17,22,36,.8);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:12px;">
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
+                    <span style="font-size:1.5rem;">{pm['icon']}</span>
+                    <span style="font-family:'JetBrains Mono',monospace;font-size:.95rem;font-weight:800;color:var(--cyan);letter-spacing:1px;">{pm['name']}</span>
+                </div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:.85rem;color:var(--text);word-break:break-all;">{pm['details']}</div>
+            </div>"""
+        pm_html = f"""
+        <div style="margin-top:24px;padding-top:20px;border-top:1px solid var(--line);">
+            <div style="font-family:'JetBrains Mono',monospace;font-size:.78rem;color:var(--dim);letter-spacing:2px;text-transform:uppercase;margin-bottom:14px;">Or Pay Via</div>
+            {pm_cards}
+            <p style="color:var(--dim);font-size:.75rem;margin-top:8px;">After paying via any method above, click "Pay ₹{amount}" to confirm and receive your credits + invoice.</p>
+        </div>"""
 
     body = f"""
     <div class="card" style="max-width:480px;margin:0 auto;">
@@ -577,6 +626,7 @@ def payment_page(user, payment_type, plan_key=None):
             </div>
             <button type="submit" class="btn btn-primary btn-block" onclick="return startPayment()">Pay ₹{amount}</button>
         </form>
+        {pm_html}
         <a href="/dashboard" style="display:block;text-align:center;margin-top:14px;font-family:'JetBrains Mono',monospace;font-size:.78rem;color:var(--dim);">Cancel</a>
     </div>
     <div class="pay-overlay" id="payOverlay">
@@ -647,7 +697,7 @@ def invoice_page(user, invoice):
 
 # ── Admin panel ───────────────────────────────────────────────
 
-def admin_page(user, stats, users, payments, gift_cards, invoices, flash=None):
+def admin_page(user, stats, users, payments, gift_cards, invoices, payment_methods, flash=None):
     flash_html = ''
     if flash:
         cls = 'flash-ok' if flash.startswith('ok:') else 'flash-error'
@@ -674,6 +724,69 @@ def admin_page(user, stats, users, payments, gift_cards, invoices, flash=None):
             </div>
             <button type="submit" class="btn btn-green">Generate</button>
         </form>
+    </div>"""
+
+    # Add credits to user
+    user_options = ''
+    for u in users:
+        user_options += f'<option value="{u["id"]}">{u["name"]} — {u["email"]} ({u["credits"]} cr)</option>'
+
+    add_credits = f"""
+    <div class="card">
+        <h2>⚡ Add Credits to User</h2>
+        <form action="/admin/add-credits" method="post" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+            <div class="field" style="flex:2;min-width:200px;margin-bottom:0;">
+                <label>Select User</label>
+                <select name="user_id" required style="width:100%;padding:14px 16px;background:rgba(5,6,10,.8);border:1px solid var(--line);border-radius:10px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:.85rem;">
+                    {user_options}
+                </select>
+            </div>
+            <div class="field" style="flex:1;min-width:120px;margin-bottom:0;">
+                <label>Credits</label>
+                <input type="number" name="amount" placeholder="e.g. 50" min="1" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Add Credits</button>
+        </form>
+    </div>"""
+
+    # Payment methods management
+    pm_rows = ''
+    for pm in payment_methods:
+        pm_rows += f"""<tr>
+            <td>{pm['icon']} {pm['name']}</td>
+            <td style="font-size:.75rem;color:var(--dim);">{pm['details']}</td>
+            <td>{pm['created_at']}</td>
+            <td>
+                <form action="/admin/delete-payment-method" method="post" style="display:inline;">
+                    <input type="hidden" name="method_id" value="{pm['id']}">
+                    <button type="submit" class="btn btn-sm" style="background:rgba(255,56,96,.15);color:var(--red);border:1px solid rgba(255,56,96,.3);">Delete</button>
+                </form>
+            </td>
+        </tr>"""
+
+    payment_methods_section = f"""
+    <div class="card">
+        <h2>💳 Payment Methods</h2>
+        <p style="color:var(--dim);font-size:.82rem;margin-bottom:18px;">Add any payment method you want — UPI, bank transfer, crypto, etc. Users will see these on the payment page.</p>
+        <form action="/admin/add-payment-method" method="post" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:20px;">
+            <div class="field" style="flex:1;min-width:100px;margin-bottom:0;">
+                <label>Icon</label>
+                <input type="text" name="icon" placeholder="💳" maxlength="4" value="💳" style="text-align:center;">
+            </div>
+            <div class="field" style="flex:2;min-width:140px;margin-bottom:0;">
+                <label>Method Name</label>
+                <input type="text" name="name" placeholder="e.g. UPI / PhonePe" required>
+            </div>
+            <div class="field" style="flex:3;min-width:200px;margin-bottom:0;">
+                <label>Details (UPI ID / Number / Link)</label>
+                <input type="text" name="details" placeholder="e.g. chirag@upi" required>
+            </div>
+            <button type="submit" class="btn btn-green">Add Method</button>
+        </form>
+        <div class="table-wrap"><table>
+            <thead><tr><th>Method</th><th>Details</th><th>Added</th><th></th></tr></thead>
+            <tbody>{pm_rows if pm_rows else '<tr><td colspan="4" style="text-align:center;color:var(--dim);">No custom payment methods yet. Add UPI, bank transfer, etc.</td></tr>'}</tbody>
+        </table></div>
     </div>"""
 
     # Gift cards table
@@ -734,5 +847,5 @@ def admin_page(user, stats, users, payments, gift_cards, invoices, flash=None):
         </table></div>
     </div>"""
 
-    body = stats_html + gift_create + gift_table + users_table + pay_table + inv_table
+    body = stats_html + add_credits + payment_methods_section + gift_create + gift_table + users_table + pay_table + inv_table
     return base_page("Cipher · Admin Panel", body, user)

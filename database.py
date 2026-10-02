@@ -81,6 +81,14 @@ def init_db():
             FOREIGN KEY (user_id) REFERENCES users(id),
             FOREIGN KEY (payment_id) REFERENCES payments(id)
         );
+        CREATE TABLE IF NOT EXISTS payment_methods (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            details TEXT NOT NULL,
+            icon TEXT DEFAULT '💳',
+            is_active INTEGER DEFAULT 1,
+            created_at TEXT DEFAULT (datetime('now'))
+        );
     ''')
 
     # Create admin user if not exists
@@ -306,3 +314,40 @@ def get_stats():
         'payments': total_payments,
         'active_cards': active_cards,
     }
+
+
+# ── Payment Methods (admin-managed) ──────────────────────────
+
+def add_payment_method(name, details, icon='💳'):
+    conn = get_db()
+    conn.execute(
+        'INSERT INTO payment_methods (name, details, icon) VALUES (?, ?, ?)',
+        (name, details, icon)
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_payment_methods():
+    conn = get_db()
+    methods = conn.execute(
+        'SELECT * FROM payment_methods WHERE is_active = 1 ORDER BY created_at DESC'
+    ).fetchall()
+    conn.close()
+    return methods
+
+
+def get_all_payment_methods():
+    conn = get_db()
+    methods = conn.execute(
+        'SELECT * FROM payment_methods ORDER BY created_at DESC'
+    ).fetchall()
+    conn.close()
+    return methods
+
+
+def delete_payment_method(method_id):
+    conn = get_db()
+    conn.execute('DELETE FROM payment_methods WHERE id = ?', (method_id,))
+    conn.commit()
+    conn.close()
