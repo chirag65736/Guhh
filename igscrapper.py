@@ -71,9 +71,15 @@ def fetch_instagram_profile(username):
     headers = get_headers()
     url = f'https://www.instagram.com/{username}/'
     pc.cprint(f"cyan  [*] Fetching profile → @{username} reset")
+    proxies = None
+    proxy_url = os.environ.get('INSTAGRAM_PROXY')
+    if proxy_url:
+        proxies = {'http': proxy_url, 'https': proxy_url}
+        pc.cprint(f"cyan  [*] Using proxy → {proxy_url} reset")
     try:
-        response = requests.get(url, headers=headers, timeout=10)
+        response = requests.get(url, headers=headers, timeout=20, proxies=proxies)
         if response.status_code != 200:
+            pc.cprint(f"red  [-] HTTP {response.status_code} reset")
             return None
         return response
     except Exception as e:
