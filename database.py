@@ -212,10 +212,14 @@ def add_credits(user_id, amount):
 
 
 def deduct_credit(user_id):
+    return deduct_credits(user_id, 1)
+
+
+def deduct_credits(user_id, amount=1):
     conn = get_db()
     user = conn.execute('SELECT credits FROM users WHERE id = ?', (user_id,)).fetchone()
-    if user and user['credits'] >= 1:
-        conn.execute('UPDATE users SET credits = credits - 1 WHERE id = ?', (user_id,))
+    if user and user['credits'] >= amount:
+        conn.execute('UPDATE users SET credits = credits - ? WHERE id = ?', (amount, user_id))
         conn.commit()
         conn.close()
         return True

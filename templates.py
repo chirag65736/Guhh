@@ -326,16 +326,73 @@ tr:hover td { background: rgba(0,229,255,.04); }
     font-family: 'JetBrains Mono', monospace; font-size: .68rem; color: var(--dim);
     letter-spacing: 1px; margin-top: 4px;
 }
+/* mobile nav toggle */
+.nav-toggle {
+    display: none; background: none; border: none; cursor: pointer;
+    padding: 6px; z-index: 11;
+}
+.nav-toggle span {
+    display: block; width: 24px; height: 2px; background: var(--cyan);
+    border-radius: 2px; transition: all .3s;
+}
+.nav-toggle span + span { margin-top: 5px; }
+.nav-toggle.open span:nth-child(1) { transform: rotate(45deg) translate(5px, 5px); }
+.nav-toggle.open span:nth-child(2) { opacity: 0; }
+.nav-toggle.open span:nth-child(3) { transform: rotate(-45deg) translate(6px, -6px); }
 /* responsive */
-@media (max-width: 600px) {
-    .nav { padding: 12px 16px; }
-    .nav-brand .name { font-size: 1.1rem; }
-    .nav-links { gap: 10px; }
-    .page { padding: 24px 14px; }
-    .card { padding: 24px 18px; }
-    .invoice { padding: 28px 20px; }
-    .invoice-head { flex-direction: column; gap: 16px; }
+@media (max-width: 768px) {
+    .nav { padding: 12px 16px; flex-wrap: wrap; }
+    .nav-brand .name { font-size: 1.1rem; letter-spacing: 2px; }
+    .nav-brand .logo { width: 32px; height: 32px; }
+    .nav-toggle { display: block; }
+    .nav-links {
+        display: none; flex-direction: column; width: 100%;
+        gap: 0; padding: 8px 0 0; margin-top: 10px;
+        border-top: 1px solid var(--line);
+    }
+    .nav-links.open { display: flex; }
+    .nav-links a, .nav-links span {
+        padding: 12px 4px; font-size: .82rem; border-bottom: 1px solid rgba(0,229,255,.06);
+    }
+    .nav-credits { align-self: flex-start; }
+    .nav-logout { align-self: flex-start; }
+    .page { padding: 16px 12px; }
+    .card { padding: 20px 16px; border-radius: 14px; margin-bottom: 16px; }
+    .card h2 { font-size: 1rem; }
+    .btn { padding: 12px 20px; font-size: .78rem; letter-spacing: 1px; }
+    .btn-block { width: 100%; }
+    .plans-grid { grid-template-columns: 1fr; gap: 14px; }
+    .plan-card { padding: 22px 18px; }
+    .plan-card .plan-price { font-size: 1.8rem; }
+    .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+    .stat-card { padding: 16px 12px; }
+    .stat-card .stat-value { font-size: 1.4rem; }
+    .invoice { padding: 24px 16px; border-radius: 14px; }
+    .invoice-head { flex-direction: column; gap: 14px; }
     .invoice-head .inv-meta { text-align: left; }
+    .invoice-sign .sign-name { font-size: 2rem; }
+    .invoice-total .total-amount { font-size: 1.3rem; }
+    form { width: 100%; }
+    form[style*="display:flex"] { flex-direction: column; }
+    form[style*="display:flex"] > * { width: 100% !important; }
+    form[style*="display:flex"] .btn { margin-top: 8px; }
+    .field { width: 100%; }
+    input[type="text"], input[type="email"], input[type="password"], input[type="number"] {
+        font-size: .9rem; padding: 12px 14px;
+    }
+    table { font-size: .72rem; }
+    th, td { padding: 8px 6px; }
+    .made-by { padding: 16px 12px; font-size: .68rem; }
+    .pay-card-3d { width: 280px; height: 180px; }
+    .verify-scanner { width: 200px; height: 200px; }
+    .scan-steps { max-width: 100%; }
+    .radar { width: 170px; height: 170px; }
+}
+@media (max-width: 380px) {
+    .nav-brand .name { font-size: 1rem; }
+    .card { padding: 16px 12px; }
+    .btn { padding: 10px 16px; font-size: .72rem; }
+    .stats-grid { grid-template-columns: 1fr; }
 }
 """
 
@@ -373,6 +430,7 @@ def nav_bar(user=None):
             <div class="logo">{LOGO_SVG}</div>
             <span class="name">CIPHER</span>
         </a>
+        <button class="nav-toggle" onclick="var n=this.parentElement.querySelector('.nav-links');n.classList.toggle('open');this.classList.toggle('open');"><span></span><span></span><span></span></button>
         <div class="nav-links">{links}</div>
     </nav>"""
 
@@ -483,7 +541,7 @@ def dashboard_page(user, flash=None):
             <button type="submit" class="btn btn-primary">⚡ Quick Scan</button>
         </form>
         <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--line);">
-            <p style="color:var(--dim);font-size:.78rem;margin-bottom:12px;">🔍 <b style="color:var(--magenta);">Private Deep Scan</b> — finds <b>more posts</b> using pagination (up to 60). Separate scraper engine.</p>
+            <p style="color:var(--dim);font-size:.78rem;margin-bottom:12px;">🔍 <b style="color:var(--magenta);">Private Deep Scan</b> — finds <b>more posts</b> using pagination (up to 60). <b style="color:var(--magenta);">2 credits</b> per scan. Separate scraper engine.</p>
             <form action="/scrape-private" method="get" style="display:flex;gap:12px;flex-wrap:wrap;">
                 <input type="text" name="username" placeholder="Instagram username..." required style="flex:1;min-width:200px;" autocomplete="off">
                 <button type="submit" class="btn btn-outline" style="border-color:var(--magenta);color:var(--magenta);">🔍 Deep Scan</button>

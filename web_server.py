@@ -166,8 +166,8 @@ class CipherHandler(http.server.BaseHTTPRequestHandler):
             if not username:
                 self._redirect('/dashboard')
                 return
-            if not db.deduct_credit(user['id']):
-                self._redirect('/dashboard?flash=error:' + urllib.parse.quote('No credits! Buy credits first.'))
+            if not db.deduct_credits(user['id'], 2):
+                self._redirect('/dashboard?flash=error:' + urllib.parse.quote('Need 2 credits for Deep Scan! Buy credits first.'))
                 return
             print(f"[*] Private deep scan requested for @{username} by {user['email']}", flush=True)
             db.log_activity(user['id'], 'search', f'{username} (deep)')
@@ -430,7 +430,18 @@ class CipherHandler(http.server.BaseHTTPRequestHandler):
             print(f"[*] UPI payment submitted by {user['email']}: UTR={utr}, AI={ai_result['recommendation']}", flush=True)
 
             if ai_result['recommendation'] == 'verified':
-                flash_msg = 'AI verified your payment! Admin will confirm shortly. Credits will be added after approval.'
+                # AI verified — auto-approve: add credits, create invoice, email
+                result = db.verify_upi_payment(payment_id)
+                if result:
+                    email_sender.send_invoice_email(
+                        result['user_email'], result['invoice_number'],
+                        result['amount'], result['details'], result['user_name']
+                    )
+                    print(f"[*] UPI payment auto-verified by AI for {user['email']}, invoice {result['invoice_number']}", flush=True)
+                    self._redirect(f'/invoice?id={result["invoice_id"]}')
+                else:
+                    self._redirect('/dashboard?flash=error:' + urllib.parse.quote('Payment already processed.'))
+                return
             elif ai_result['recommendation'] == 'suspicious':
                 flash_msg = 'AI flagged your payment for review. Admin will verify manually.'
             elif ai_result['recommendation'] == 'rejected':
