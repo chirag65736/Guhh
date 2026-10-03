@@ -47,8 +47,23 @@ SQLite DB persists in a named Docker volume (`cipher_data`).
 - Screenshots are stored privately in `data/screenshots/` (admin-only via /screenshot).
 - Admin panel shows UPI Payment Verifications section with AI recommendation + approve/reject.
 
+## Scraper System
+- **igscrapper.py** — main scraper with 3 strategies (tried in order):
+  1. `instagrapi` (private mobile API) — most robust, needs non-flagged IP
+  2. Web API with session cookies — `instagram.com/api/v1/users/web_profile_info/`
+  3. Direct HTML request — original approach, extracts JSON from `<script>` tags
+- All strategies use Tor SOCKS5 proxy (127.0.0.1:9050) if available.
+- `INSTAGRAM_PROXY` env var overrides Tor with a custom proxy (residential recommended).
+- `extract_timeline_data` handles both API JSON and embedded HTML JSON formats.
+- `extract_highest_resolution_urls` handles `image_versions2`, `display_url`, and carousel posts.
+- **alt_scraper.py** — separate alternative scraper using `curl_cffi` (Chrome TLS impersonation) + Tor.
+  Uses a different technique: browser fingerprint impersonation for API + HTML scraping.
+  Run standalone: `python alt_scraper.py official_paul_7814`
+- Instagram blocks datacenter IPs (429/login redirect); success depends on Tor exit node.
+- Scrape takes ~30-40s due to multiple strategy attempts through Tor.
+
 ## Notes
-- Instagram may block scraping from datacenter IPs; the app shows an
-  "Unsuccessful" page if the profile fetch fails.
+- Instagram blocks datacenter IPs; scraper relies on Tor exit nodes (may fail if flagged).
+- Set `INSTAGRAM_PROXY` to a residential proxy for reliable scraping.
 - OPENAI_API_KEY is optional — without it, UPI submissions default to manual admin review.
 - No live-reload dev server; call `reload_preview` after code changes.

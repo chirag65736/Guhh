@@ -67,27 +67,156 @@ def loading_animation():
     pc.cprint("green \n  [✓] Engine Ready. 100% reset\n")
 
 
-def fetch_instagram_profile(username):
-    headers = get_headers()
-    url = f'https://www.instagram.com/{username}/'
-    pc.cprint(f"cyan  [*] Fetching profile → @{username} reset")
-    proxies = None
+class ProfileResponse:
+    """Response-like object that works with extract_timeline_data."""
+    def __init__(self, text, status_code=200):
+        self.text = text
+        self.status_code = status_code
+
+
+def _get_tor_proxies():
+    """Return Tor SOCKS5 proxy dict if Tor is available, else None."""
     proxy_url = os.environ.get('INSTAGRAM_PROXY')
     if proxy_url:
-        proxies = {'http': proxy_url, 'https': proxy_url}
-        pc.cprint(f"cyan  [*] Using proxy → {proxy_url} reset")
+        return {'http': proxy_url, 'https': proxy_url}
+    # Try Tor
     try:
-        response = requests.get(url, headers=headers, timeout=20, proxies=proxies)
-        if response.status_code != 200:
-            pc.cprint(f"red  [-] HTTP {response.status_code} reset")
-            return None
-        return response
-    except Exception as e:
-        pc.cprint(f"red  [-] Error fetching profile: {str(e)} reset")
+        import socket as _sock
+        s = _sock.socket(_sock.AF_INET, _sock.SOCK_STREAM)
+        s.settimeout(2)
+        s.connect(('127.0.0.1', 9050))
+        s.close()
+        return {'http': 'socks5://127.0.0.1:9050', 'https': 'socks5://127.0.0.1:9050'}
+    except Exception:
         return None
 
 
+def _try_instagrapi(username, proxies):
+    """Strategy 1: Use instagrapi library (private mobile API)."""
+    try:
+        from instagrapi import Client
+        cl = Client()
+        if proxies:
+            cl = Client(settings={'proxy': proxies.get('https', proxies.get('http'))})
+        cl.request_timeout = 10
+        user_info = cl.user_info_by_username(username)
+        if not user_info:
+            return None
+        medias = cl.user_medias(user_info.pk, amount=20)
+        urls = {}
+        for m in medias:
+            if hasattr(m, 'thumbnail_url') and m.thumbnail_url:
+                urls[str(m.pk)] = m.thumbnail_url
+            if hasattr(m, 'resources') and m.resources:
+                for r in m.resources:
+                    if hasattr(r, 'thumbnail_url') and r.thumbnail_url:
+                        urls[f"{m.pk}_{r.pk}"] = r.thumbnail_url
+        if urls:
+            return ProfileResponse(json.dumps({'_direct_urls': urls}))
+    except Exception as e:
+        pc.cprint(f"yellow  [!] instagrapi failed: {e} reset")
+    return None
+
+
+def _try_web_api(username, proxies):
+    """Strategy 2: Use Instagram web API with session cookies."""
+    try:
+        session = requests.Session()
+        session.headers.update({
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'accept-language': 'en-US,en;q=0.9',
+        })
+        r0 = session.get('https://www.instagram.com/', proxies=proxies, timeout=10)
+        if r0.status_code != 200:
+            return None
+        time.sleep(0.5)
+        session.headers.update({
+            'x-ig-app-id': '936619743392459',
+            'x-csrftoken': session.cookies.get('csrftoken', ''),
+            'accept': '*/*',
+            'referer': f'https://www.instagram.com/{username}/',
+        })
+        r = session.get(
+            f'https://www.instagram.com/api/v1/users/web_profile_info/?username={username}',
+            proxies=proxies, timeout=10
+        )
+        if r.status_code == 200:
+            return ProfileResponse(r.text)
+        pc.cprint(f"yellow  [!] Web API returned {r.status_code} reset")
+    except Exception as e:
+        pc.cprint(f"yellow  [!] Web API failed: {e} reset")
+    return None
+
+
+def _try_direct(username, proxies):
+    """Strategy 3: Direct request (original approach, fallback)."""
+    headers = get_headers()
+    url = f'https://www.instagram.com/{username}/'
+    try:
+        response = requests.get(url, headers=headers, timeout=15, proxies=proxies)
+        if response.status_code != 200:
+            pc.cprint(f"yellow  [!] Direct returned {response.status_code} reset")
+            return None
+        if 'accounts/login' in response.url:
+            pc.cprint("yellow  [!] Direct: redirected to login page reset")
+            return None
+        return response
+    except Exception as e:
+        pc.cprint(f"yellow  [!] Direct failed: {e} reset")
+    return None
+
+
+def fetch_instagram_profile(username):
+    """Fetch Instagram profile using multiple strategies."""
+    pc.cprint(f"cyan  [*] Fetching profile → @{username} reset")
+    proxies = _get_tor_proxies()
+    if proxies:
+        proxy_str = proxies.get('https', proxies.get('http', ''))
+        pc.cprint(f"cyan  [*] Using proxy → {proxy_str} reset")
+
+    # Strategy 1: instagrapi (private mobile API)
+    pc.cprint("cyan  [*] Strategy 1: instagrapi (mobile API)... reset")
+    result = _try_instagrapi(username, proxies)
+    if result:
+        pc.cprint("green  [✓] instagrapi succeeded reset")
+        return result
+
+    # Strategy 2: Web API with session cookies
+    pc.cprint("cyan  [*] Strategy 2: Web API with cookies... reset")
+    result = _try_web_api(username, proxies)
+    if result:
+        pc.cprint("green  [✓] Web API succeeded reset")
+        return result
+
+    # Strategy 3: Direct request (original approach)
+    pc.cprint("cyan  [*] Strategy 3: Direct request... reset")
+    result = _try_direct(username, proxies)
+    if result:
+        pc.cprint("green  [✓] Direct request succeeded reset")
+        return result
+
+    pc.cprint("red  [-] All strategies failed (Instagram may be blocking this IP) reset")
+    return None
+
+
 def extract_timeline_data(html_content):
+    # Handle direct API JSON response
+    try:
+        data = json.loads(html_content)
+        # Direct URLs from instagrapi
+        if '_direct_urls' in data:
+            return data
+        # Web API format: {"user": {"edge_owner_to_timeline_media": {"edges": [...]}}}
+        if 'user' in data and 'edge_owner_to_timeline_media' in data.get('user', {}):
+            return data
+        # If it's already parsed data with timeline
+        if 'edge_owner_to_timeline_media' in data:
+            return data
+    except (json.JSONDecodeError, TypeError):
+        pass
+
+    # Handle HTML with embedded JSON (original approach)
     try:
         soup = BeautifulSoup(html_content, 'html.parser')
         script_tags = soup.find_all('script', {'type': 'application/json'})
@@ -117,6 +246,56 @@ def extract_highest_resolution_urls(obj, urls=None, post_id=None):
     if urls is None:
         urls = {}
     try:
+        # Direct URLs from instagrapi
+        if isinstance(obj, dict) and '_direct_urls' in obj:
+            for pid, url in obj['_direct_urls'].items():
+                if pid not in urls:
+                    urls[pid] = decode_url(url)
+            return urls
+
+        # Web API format: {"user": {"edge_owner_to_timeline_media": {"edges": [{"node": {...}}]}}}
+        if isinstance(obj, dict) and 'user' in obj:
+            user = obj['user']
+            timeline = user.get('edge_owner_to_timeline_media', {})
+            edges = timeline.get('edges', [])
+            for edge in edges:
+                node = edge.get('node', {})
+                shortcode = node.get('shortcode', '')
+                # Single image/video
+                display_url = node.get('display_url', '')
+                if display_url and shortcode:
+                    urls[shortcode] = decode_url(display_url)
+                # Carousel (multiple images)
+                sidecar = node.get('edge_sidecar_to_children', {})
+                if sidecar:
+                    for se in sidecar.get('edges', []):
+                        child = se.get('node', {})
+                        child_url = child.get('display_url', '')
+                        if child_url:
+                            idx = child.get('shortcode', '') or f"{shortcode}_{len(urls)}"
+                            urls[idx] = decode_url(child_url)
+            return urls
+
+        # Direct timeline format
+        if isinstance(obj, dict) and 'edge_owner_to_timeline_media' in obj:
+            edges = obj['edge_owner_to_timeline_media'].get('edges', [])
+            for edge in edges:
+                node = edge.get('node', {})
+                shortcode = node.get('shortcode', '')
+                display_url = node.get('display_url', '')
+                if display_url and shortcode:
+                    urls[shortcode] = decode_url(display_url)
+                sidecar = node.get('edge_sidecar_to_children', {})
+                if sidecar:
+                    for se in sidecar.get('edges', []):
+                        child = se.get('node', {})
+                        child_url = child.get('display_url', '')
+                        if child_url:
+                            idx = child.get('shortcode', '') or f"{shortcode}_{len(urls)}"
+                            urls[idx] = decode_url(child_url)
+            return urls
+
+        # Original format: recursive search for image_versions2
         if isinstance(obj, dict):
             if 'pk' in obj and isinstance(obj.get('pk'), str):
                 post_id = obj['pk']
