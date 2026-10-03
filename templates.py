@@ -1427,13 +1427,15 @@ def admin_page(user, stats, users, payments, gift_cards, invoices, payment_metho
 
         ss_link = f'<a href="/screenshot?name={up["screenshot_path"]}" target="_blank" style="color:var(--cyan);">📸 View</a>' if up['screenshot_path'] else '—'
         ai_reason = f'<br><span style="font-size:.68rem;color:var(--dim);">{up["ai_reason"][:60]}</span>' if up['ai_reason'] else ''
+        review_flag = f'<br><span style="font-size:.62rem;color:var(--green);font-weight:700;letter-spacing:1px;">⏳ AWAITING REVIEW</span>' if (ai == 'verified' and up['status'] == 'pending') else ''
+        row_highlight = ' style="background:rgba(0,255,156,.06);"' if (ai == 'verified' and up['status'] == 'pending') else ''
 
-        upi_rows += f"""<tr>
+        upi_rows += f"""<tr{row_highlight}>
             <td style="font-size:.75rem;">{up['user_name'] or up['email']}<br><span style="font-size:.68rem;color:var(--dim);">{up['sender_name']}</span></td>
             <td>₹{up['amount']}<br><span style="font-size:.68rem;color:var(--cyan);">{up['credits']} cr</span></td>
             <td style="font-size:.72rem;">{up['utr']}</td>
             <td>{ss_link}</td>
-            <td style="font-size:.72rem;">{ai_badge}{ai_reason}</td>
+            <td style="font-size:.72rem;">{ai_badge}{ai_reason}{review_flag}</td>
             <td>{status_badge}</td>
             <td>{actions}</td>
         </tr>"""
