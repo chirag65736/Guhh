@@ -3,7 +3,9 @@ HTML templates for Cipher — landing, auth, dashboard, payment,
 invoice, and admin pages.  Keeps the existing cyberpunk theme.
 """
 
+import urllib.parse
 from database import PLANS, PER_POST_PRICE
+from upi_payment import UPI_ID
 
 # ── Shared CSS (regular string — no f-string brace issues) ────
 
@@ -562,6 +564,62 @@ function startPayment() {
     }, 4200);
     return false;
 }
+
+function copyUpi() {
+    navigator.clipboard.writeText('""" + UPI_ID + """').then(function() {
+        var btn = document.querySelector('.copy-btn');
+        var orig = btn.textContent;
+        btn.textContent = '✓ Copied!';
+        btn.style.color = 'var(--green)';
+        btn.style.borderColor = 'rgba(0,255,156,.4)';
+        setTimeout(function() { btn.textContent = orig; btn.style.color = ''; btn.style.borderColor = ''; }, 2000);
+    });
+}
+
+function showUpload() {
+    var form = document.getElementById('upiUploadForm');
+    form.style.display = 'block';
+    form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function previewSS(input) {
+    if (input.files && input.files[0]) {
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            var img = document.getElementById('ssPreview');
+            img.src = e.target.result;
+            img.style.display = 'block';
+        };
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+
+function startUpiVerify() {
+    var form = document.getElementById('upiForm');
+    if (!form.checkValidity()) { form.reportValidity(); return false; }
+
+    var overlay = document.getElementById('upiVerifyOverlay');
+    var scanner = document.getElementById('verifyScanner');
+    var check = document.getElementById('verifyCheck');
+    var steps = document.querySelectorAll('.verify-step');
+    overlay.classList.add('active');
+    scanner.style.display = 'block';
+    check.classList.remove('show');
+    steps.forEach(function(s) { s.classList.remove('active'); s.style.color = ''; });
+
+    setTimeout(function() { steps[0].classList.add('active'); }, 300);
+    setTimeout(function() { steps[0].classList.remove('active'); steps[1].classList.add('active'); }, 1600);
+    setTimeout(function() { steps[1].classList.remove('active'); steps[2].classList.add('active'); }, 2900);
+    setTimeout(function() {
+        steps[2].classList.remove('active');
+        scanner.style.display = 'none';
+        check.classList.add('show');
+        steps[3].classList.add('active');
+        steps[3].style.color = 'var(--green)';
+    }, 4000);
+    setTimeout(function() { form.submit(); }, 5000);
+    return false;
+}
 """
 
 
@@ -581,6 +639,10 @@ def payment_page(user, payment_type, plan_key=None, payment_methods=None):
     else:
         return base_page("Cipher · Error", '<div class="card"><div class="flash flash-error">Invalid payment option.</div><a href="/dashboard" class="btn btn-outline">Back to Dashboard</a></div>', user)
 
+    # UPI deep link + QR code
+    upi_link = f"upi://pay?pa={UPI_ID}&pn=CIPHER&am={amount}&cu=INR&tn=Cipher Credits"
+    qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={urllib.parse.quote(upi_link)}"
+
     # Custom payment methods section
     pm_html = ''
     if payment_methods:
@@ -596,15 +658,14 @@ def payment_page(user, payment_type, plan_key=None, payment_methods=None):
             </div>"""
         pm_html = f"""
         <div style="margin-top:24px;padding-top:20px;border-top:1px solid var(--line);">
-            <div style="font-family:'JetBrains Mono',monospace;font-size:.78rem;color:var(--dim);letter-spacing:2px;text-transform:uppercase;margin-bottom:14px;">Or Pay Via</div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:.78rem;color:var(--dim);letter-spacing:2px;text-transform:uppercase;margin-bottom:14px;">Other Methods</div>
             {pm_cards}
-            <p style="color:var(--dim);font-size:.75rem;margin-top:8px;">After paying via any method above, click "Pay ₹{amount}" to confirm and receive your credits + invoice.</p>
         </div>"""
 
     body = f"""
     <div class="card" style="max-width:480px;margin:0 auto;">
         <h2>💳 {title_text}</h2>
-        <p style="color:var(--dim);font-size:.85rem;margin-bottom:24px;">{desc}</p>
+        <p style="color:var(--dim);font-size:.85rem;margin-bottom:20px;">{desc}</p>
         <div style="background:rgba(17,22,36,.8);border:1px solid var(--line);border-radius:12px;padding:20px;margin-bottom:24px;">
             <div style="display:flex;justify-content:space-between;margin-bottom:12px;">
                 <span style="font-family:'JetBrains Mono',monospace;font-size:.78rem;color:var(--dim);letter-spacing:1px;">Amount</span>
@@ -615,6 +676,44 @@ def payment_page(user, payment_type, plan_key=None, payment_methods=None):
                 <span style="font-family:'JetBrains Mono',monospace;font-size:.9rem;color:var(--cyan);">{credits}</span>
             </div>
         </div>
+
+        <!-- UPI Section (Primary) -->
+        <div style="background:linear-gradient(135deg,rgba(0,229,255,.08),rgba(124,58,237,.08));border:1px solid rgba(0,229,255,.25);border-radius:16px;padding:28px 22px;margin-bottom:20px;text-align:center;">
+            <div style="font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--cyan);letter-spacing:4px;text-transform:uppercase;margin-bottom:14px;">⚡ Pay via UPI</div>
+            <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+                <span style="font-family:'JetBrains Mono',monospace;font-size:1.05rem;font-weight:800;color:var(--cyan);letter-spacing:1px;text-shadow:0 0 20px rgba(0,229,255,.4);">{UPI_ID}</span>
+                <button class="copy-btn" onclick="copyUpi()" style="background:rgba(0,229,255,.15);border:1px solid rgba(0,229,255,.4);color:var(--cyan);padding:5px 12px;border-radius:8px;font-family:'JetBrains Mono',monospace;font-size:.7rem;cursor:pointer;transition:all .3s;">📋 Copy</button>
+            </div>
+            <div style="position:relative;width:180px;height:180px;margin:0 auto 14px;border-radius:14px;overflow:hidden;border:2px solid rgba(0,229,255,.3);">
+                <img src="{qr_url}" alt="UPI QR Code" style="width:100%;height:100%;">
+                <div style="position:absolute;left:0;right:0;height:3px;background:linear-gradient(90deg,transparent,var(--cyan),transparent);box-shadow:0 0 15px var(--cyan);animation:qrScan 2.5s ease-in-out infinite;"></div>
+            </div>
+            <p style="color:var(--dim);font-size:.78rem;margin-bottom:16px;">Scan QR or copy UPI ID · Pay <b style="color:var(--green);">₹{amount}</b></p>
+            <button class="btn btn-green btn-block" onclick="showUpload()" style="animation:pulse 2s infinite;">✓ I've Paid — Submit Proof</button>
+        </div>
+
+        <!-- UPI Upload Form (hidden) -->
+        <div id="upiUploadForm" style="display:none;margin-bottom:20px;">
+            <form id="upiForm" action="/verify-upi" method="post" enctype="multipart/form-data" style="background:rgba(17,22,36,.6);border:1px solid var(--line);border-radius:14px;padding:22px 18px;">
+                <div style="font-family:'JetBrains Mono',monospace;font-size:.82rem;color:var(--cyan);letter-spacing:2px;text-transform:uppercase;margin-bottom:16px;">📤 Submit Payment Proof</div>
+                <input type="hidden" name="payment_type" value="{payment_type}">
+                <input type="hidden" name="plan_key" value="{plan_key or ''}">
+                <input type="hidden" name="amount" value="{amount}">
+                <input type="hidden" name="credits" value="{credits}">
+                <div class="field"><label>Your Name / UPI Sender Name</label><input type="text" name="sender_name" required placeholder="Name shown in UPI app"></div>
+                <div class="field"><label>UTR Number (Transaction Ref)</label><input type="text" name="utr" required placeholder="e.g. 452178963012" maxlength="22"></div>
+                <div class="field"><label>Payment Screenshot</label><input type="file" name="screenshot" accept="image/*" required onchange="previewSS(this)" style="padding:10px;"><img id="ssPreview" style="display:none;max-width:100%;border-radius:10px;margin-top:10px;border:1px solid var(--line);"></div>
+                <button type="submit" class="btn btn-primary btn-block" onclick="return startUpiVerify()">🤖 Submit & AI Verify</button>
+            </form>
+        </div>
+
+        <!-- Divider -->
+        <div style="text-align:center;margin:24px 0;font-family:'JetBrains Mono',monospace;font-size:.68rem;color:var(--dim);letter-spacing:3px;text-transform:uppercase;position:relative;">
+            <span style="background:rgba(10,13,20,.75);padding:0 16px;position:relative;z-index:1;">Or Pay by Card</span>
+            <div style="position:absolute;top:50%;left:0;right:0;height:1px;background:var(--line);"></div>
+        </div>
+
+        <!-- Card Payment (secondary) -->
         <form id="payForm" action="/process-payment" method="post">
             <input type="hidden" name="payment_type" value="{payment_type}">
             <input type="hidden" name="plan_key" value="{plan_key or ''}">
@@ -625,11 +724,13 @@ def payment_page(user, payment_type, plan_key=None, payment_methods=None):
                 <div class="field" style="flex:1;"><label>Expiry</label><input type="text" name="expiry" placeholder="MM/YY" maxlength="5"></div>
                 <div class="field" style="flex:1;"><label>CVV</label><input type="text" name="cvv" placeholder="123" maxlength="4"></div>
             </div>
-            <button type="submit" class="btn btn-primary btn-block" onclick="return startPayment()">Pay ₹{amount}</button>
+            <button type="submit" class="btn btn-outline btn-block" onclick="return startPayment()">Pay ₹{amount} by Card</button>
         </form>
         {pm_html}
         <a href="/dashboard" style="display:block;text-align:center;margin-top:14px;font-family:'JetBrains Mono',monospace;font-size:.78rem;color:var(--dim);">Cancel</a>
     </div>
+
+    <!-- Card Payment Animation -->
     <div class="pay-overlay" id="payOverlay">
         <div style="text-align:center;">
             <div class="pay-card-3d" id="payCard">
@@ -643,9 +744,35 @@ def payment_page(user, payment_type, plan_key=None, payment_methods=None):
             </div>
             <div class="pay-status" id="payStatus">Authenticating...</div>
         </div>
+    </div>
+
+    <!-- UPI AI Verification Animation -->
+    <div class="upi-verify-overlay" id="upiVerifyOverlay">
+        <div style="text-align:center;">
+            <div class="verify-scanner" id="verifyScanner" style="display:none;">
+                <div class="scan-grid"></div>
+            </div>
+            <div class="verify-check" id="verifyCheck" style="display:none;width:80px;height:80px;margin:20px auto;border-radius:50%;background:rgba(0,255,156,.15);border:3px solid var(--green);align-items:center;justify-content:center;">
+                <svg viewBox="0 0 52 52" style="width:40px;height:40px;"><path class="check-path" d="M14 27 L22 35 L38 17" style="stroke:var(--green);stroke-width:4;fill:none;stroke-dasharray:50;stroke-dashoffset:50;animation:drawCheck .5s ease .2s forwards;"/></svg>
+            </div>
+            <div class="verify-step" style="font-family:'JetBrains Mono',monospace;font-size:.85rem;letter-spacing:2px;color:var(--cyan);margin-top:16px;opacity:0;transition:opacity .3s;">🔍 Scanning Screenshot...</div>
+            <div class="verify-step" style="font-family:'JetBrains Mono',monospace;font-size:.85rem;letter-spacing:2px;color:var(--cyan);margin-top:16px;opacity:0;transition:opacity .3s;">📋 Extracting UTR Number...</div>
+            <div class="verify-step" style="font-family:'JetBrains Mono',monospace;font-size:.85rem;letter-spacing:2px;color:var(--cyan);margin-top:16px;opacity:0;transition:opacity .3s;">✓ Verifying Transaction...</div>
+            <div class="verify-step" style="font-family:'JetBrains Mono',monospace;font-size:.85rem;letter-spacing:2px;color:var(--cyan);margin-top:16px;opacity:0;transition:opacity .3s;">✅ AI Verification Complete!</div>
+        </div>
     </div>"""
 
-    extra = f"<style>.pay-overlay{{position:fixed;inset:0;z-index:999;display:none;align-items:center;justify-content:center;background:rgba(5,6,10,.92);backdrop-filter:blur(20px);}}.pay-overlay.active{{display:flex;}}</style><script>{PAYMENT_JS}</script>"
+    extra = f"""<style>
+@keyframes qrScan {{ 0%,100% {{ top:0; }} 50% {{ top:calc(100% - 3px); }} }}
+@keyframes pulse {{ 0%,100% {{ box-shadow:0 0 0 0 rgba(0,255,156,.4); }} 50% {{ box-shadow:0 0 0 8px rgba(0,255,156,0); }} }}
+.pay-overlay,.upi-verify-overlay {{ position:fixed;inset:0;z-index:999;display:none;align-items:center;justify-content:center;background:rgba(5,6,10,.95);backdrop-filter:blur(20px); }}
+.pay-overlay.active,.upi-verify-overlay.active {{ display:flex; }}
+.verify-scanner {{ width:240px;height:240px;margin:0 auto 20px;position:relative;border-radius:16px;overflow:hidden;border:2px solid var(--cyan);background:rgba(0,229,255,.05); }}
+.verify-scanner::before {{ content:'';position:absolute;left:0;right:0;height:4px;background:linear-gradient(90deg,transparent,var(--cyan),var(--magenta),transparent);box-shadow:0 0 20px var(--cyan);animation:qrScan 1.5s ease-in-out infinite; }}
+.scan-grid {{ position:absolute;inset:0;background-image:linear-gradient(rgba(0,229,255,.1) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,255,.1) 1px,transparent 1px);background-size:20px 20px; }}
+.verify-step.active {{ opacity:1 !important; }}
+</style>
+<script>{PAYMENT_JS}</script>"""
     return base_page(f"Cipher · Payment · ₹{amount}", body, user, extra)
 
 
@@ -698,7 +825,7 @@ def invoice_page(user, invoice):
 
 # ── Admin panel ───────────────────────────────────────────────
 
-def admin_page(user, stats, users, payments, gift_cards, invoices, payment_methods, flash=None):
+def admin_page(user, stats, users, payments, gift_cards, invoices, payment_methods, upi_payments, flash=None):
     flash_html = ''
     if flash:
         cls = 'flash-ok' if flash.startswith('ok:') else 'flash-error'
@@ -725,6 +852,60 @@ def admin_page(user, stats, users, payments, gift_cards, invoices, payment_metho
             </div>
             <button type="submit" class="btn btn-green">Generate</button>
         </form>
+    </div>"""
+
+    # UPI Payment Verifications
+    upi_rows = ''
+    for up in upi_payments:
+        ai = up['ai_recommendation']
+        if ai == 'verified':
+            ai_badge = f'<span style="color:var(--green);font-weight:700;">✓ Verified ({up["ai_confidence"]}%)</span>'
+        elif ai == 'suspicious':
+            ai_badge = f'<span style="color:var(--gold);font-weight:700;">⚠ Suspicious ({up["ai_confidence"]}%)</span>'
+        elif ai == 'rejected':
+            ai_badge = f'<span style="color:var(--red);font-weight:700;">✕ Rejected</span>'
+        else:
+            ai_badge = '<span style="color:var(--dim);">Manual review</span>'
+
+        if up['status'] == 'pending':
+            status_badge = '<span class="tag tag-active" style="background:rgba(255,215,0,.12);border:1px solid rgba(255,215,0,.4);color:var(--gold);">Pending</span>'
+            actions = f"""
+                <form action="/admin/verify-upi" method="post" style="display:inline;">
+                    <input type="hidden" name="payment_id" value="{up['id']}">
+                    <button type="submit" class="btn btn-sm btn-green" style="padding:6px 12px;font-size:.68rem;">✓ Approve</button>
+                </form>
+                <form action="/admin/reject-upi" method="post" style="display:inline;margin-left:4px;">
+                    <input type="hidden" name="payment_id" value="{up['id']}">
+                    <button type="submit" class="btn btn-sm" style="padding:6px 12px;font-size:.68rem;background:rgba(255,56,96,.15);color:var(--red);border:1px solid rgba(255,56,96,.3);">✕ Reject</button>
+                </form>"""
+        elif up['status'] == 'verified':
+            status_badge = '<span class="tag tag-active">Verified</span>'
+            actions = ''
+        else:
+            status_badge = '<span class="tag tag-redeemed">Rejected</span>'
+            actions = ''
+
+        ss_link = f'<a href="/screenshot?name={up["screenshot_path"]}" target="_blank" style="color:var(--cyan);">📷 View</a>' if up['screenshot_path'] else '—'
+        ai_reason = f'<br><span style="font-size:.68rem;color:var(--dim);">{up["ai_reason"][:60]}</span>' if up['ai_reason'] else ''
+
+        upi_rows += f"""<tr>
+            <td style="font-size:.75rem;">{up['user_name'] or up['email']}<br><span style="font-size:.68rem;color:var(--dim);">{up['sender_name']}</span></td>
+            <td>₹{up['amount']}<br><span style="font-size:.68rem;color:var(--cyan);">{up['credits']} cr</span></td>
+            <td style="font-size:.72rem;">{up['utr']}</td>
+            <td>{ss_link}</td>
+            <td style="font-size:.72rem;">{ai_badge}{ai_reason}</td>
+            <td>{status_badge}</td>
+            <td>{actions}</td>
+        </tr>"""
+
+    upi_section = f"""
+    <div class="card">
+        <h2>🤖 UPI Payment Verifications</h2>
+        <p style="color:var(--dim);font-size:.82rem;margin-bottom:18px;">AI analyzes each screenshot and suggests approve/reject. Admin makes the final call.</p>
+        <div class="table-wrap"><table>
+            <thead><tr><th>User / Sender</th><th>Amount</th><th>UTR</th><th>SS</th><th>AI Analysis</th><th>Status</th><th>Action</th></tr></thead>
+            <tbody>{upi_rows if upi_rows else '<tr><td colspan="7" style="text-align:center;color:var(--dim);">No UPI payments yet</td></tr>'}</tbody>
+        </table></div>
     </div>"""
 
     # Add credits to user
@@ -848,7 +1029,7 @@ def admin_page(user, stats, users, payments, gift_cards, invoices, payment_metho
         </table></div>
     </div>"""
 
-    body = stats_html + add_credits + payment_methods_section + gift_create + gift_table + users_table + pay_table + inv_table
+    body = stats_html + upi_section + add_credits + payment_methods_section + gift_create + gift_table + users_table + pay_table + inv_table
     return base_page("Cipher · Admin Panel", body, user)
 
 

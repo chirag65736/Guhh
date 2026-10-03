@@ -97,6 +97,24 @@ def init_db():
             created_at TEXT DEFAULT (datetime('now')),
             FOREIGN KEY (user_id) REFERENCES users(id)
         );
+        CREATE TABLE IF NOT EXISTS upi_payments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            amount REAL NOT NULL,
+            credits INTEGER NOT NULL,
+            payment_type TEXT,
+            plan_key TEXT,
+            utr TEXT,
+            sender_name TEXT,
+            screenshot_path TEXT,
+            ai_recommendation TEXT DEFAULT 'manual',
+            ai_reason TEXT DEFAULT '',
+            ai_confidence INTEGER DEFAULT 0,
+            status TEXT DEFAULT 'pending',
+            created_at TEXT DEFAULT (datetime('now')),
+            verified_at TEXT,
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        );
     ''')
 
     # Create admin user if not exists
@@ -388,6 +406,140 @@ def get_analytics():
     ''').fetchall()
     conn.close()
     return rows
+
+
+# ── UPI Payments ──────────────────────────────────────────────
+
+def check_utr_exists(utr):
+    conn = get_db()
+    row = conn.execute(
+        'SELECT id FROM upi_payments WHERE utr = ? AND status != "rejected"', (utr,)
+    ).fetchone()
+    conn.close()
+    return row is not None
+
+
+def create_upi_payment(user_id, amount, credits, payment_type, plan_key, utr, sender_name, screenshot_path):
+    conn = get_db()
+    c = conn.execute(
+        '''INSERT INTO upi_payments
+           (user_id, amount, credits, payment_type, plan_key, utr, sender_name, screenshot_path)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
+        (user_id, amount, credits, payment_type, plan_key, utr, sender_name, screenshot_path)
+    )
+    payment_id = c.lastrowid
+    conn.commit()
+    conn.close()
+    return payment_id
+
+
+def update_upi_ai_result(payment_id, recommendation, reason, confidence):
+    conn = get_db()
+    conn.execute(
+        'UPDATE upi_payments SET ai_recommendation = ?, ai_reason = ?, ai_confidence = ? WHERE id = ?',
+        (recommendation, reason, confidence, payment_id)
+    )
+    conn.commit()
+    conn.close()
+
+
+def verify_upi_payment(payment_id):
+    """Admin approves — add credits, create invoice, return info for email."""
+    conn = get_db()
+    payment = conn.execute(
+        'SELECT * FROM upi_payments WHERE id = ? AND status = "pending"', (payment_id,)
+    ).fetchone()
+    if not payment:
+        conn.close()
+        return None
+
+    conn.execute(
+        'UPDATE upi_payments SET status = "verified", verified_at = datetime("now") WHERE id = ?',
+        (payment_id,)
+    )
+    conn.execute(
+        'UPDATE users SET credits = credits + ? WHERE id = ?',
+        (payment['credits'], payment['user_id'])
+    )
+
+    pay_c = conn.execute(
+        'INSERT INTO payments (user_id, amount, payment_type, plan_key, credits) VALUES (?, ?, ?, ?, ?)',
+        (payment['user_id'], payment['amount'], payment['payment_type'] or 'upi',
+         payment['plan_key'], payment['credits'])
+    )
+    regular_payment_id = pay_c.lastrowid
+
+    if payment['payment_type'] == 'per_post':
+        desc = '1 Post Credit (UPI)'
+    elif payment['payment_type'] == 'plan' and payment['plan_key'] in PLANS:
+        plan = PLANS[payment['plan_key']]
+        credits_label = 'Unlimited' if plan['credits'] >= 999 else f"{plan['credits']} Credits"
+        desc = f'{plan["name"]} Plan — {credits_label} ({plan["duration"]}) [UPI]'
+    else:
+        desc = 'Credits Purchase (UPI)'
+
+    invoice_number = f"INV-{secrets.token_hex(4).upper()}"
+    inv_c = conn.execute(
+        'INSERT INTO invoices (invoice_number, user_id, payment_id, amount, details) VALUES (?, ?, ?, ?, ?)',
+        (invoice_number, payment['user_id'], regular_payment_id, payment['amount'], desc)
+    )
+    invoice_id = inv_c.lastrowid
+
+    conn.commit()
+    conn.close()
+
+    user = get_user_by_id(payment['user_id'])
+    return {
+        'invoice_id': invoice_id,
+        'invoice_number': invoice_number,
+        'amount': payment['amount'],
+        'details': desc,
+        'user_email': user['email'] if user else '',
+        'user_name': user['name'] if user else '',
+    }
+
+
+def reject_upi_payment(payment_id):
+    conn = get_db()
+    conn.execute(
+        'UPDATE upi_payments SET status = "rejected", verified_at = datetime("now") WHERE id = ?',
+        (payment_id,)
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_upi_payment(payment_id):
+    conn = get_db()
+    payment = conn.execute(
+        '''SELECT up.*, u.email, u.name AS user_name
+           FROM upi_payments up JOIN users u ON up.user_id = u.id
+           WHERE up.id = ?''', (payment_id,)
+    ).fetchone()
+    conn.close()
+    return payment
+
+
+def get_pending_upi_payments():
+    conn = get_db()
+    payments = conn.execute(
+        '''SELECT up.*, u.email, u.name AS user_name
+           FROM upi_payments up JOIN users u ON up.user_id = u.id
+           WHERE up.status = "pending" ORDER BY up.created_at DESC'''
+    ).fetchall()
+    conn.close()
+    return payments
+
+
+def get_all_upi_payments():
+    conn = get_db()
+    payments = conn.execute(
+        '''SELECT up.*, u.email, u.name AS user_name
+           FROM upi_payments up JOIN users u ON up.user_id = u.id
+           ORDER BY up.created_at DESC'''
+    ).fetchall()
+    conn.close()
+    return payments
 
 
 def get_analytics_summary():

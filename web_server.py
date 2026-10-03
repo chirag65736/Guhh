@@ -7,9 +7,12 @@ import http.server
 import socketserver
 import urllib.parse
 import json
+import os
 
 import database as db
 import email_sender
+import upi_payment
+import ai_verifier
 from templates import (
     landing_page, login_page, signup_page, dashboard_page,
     payment_page, invoice_page, admin_page, analytics_page,
@@ -173,7 +176,8 @@ class CipherHandler(http.server.BaseHTTPRequestHandler):
             self._serve_html(admin_page(
                 user, db.get_stats(), db.get_all_users(),
                 db.get_all_payments(), db.get_all_gift_cards(),
-                db.get_all_invoices(), db.get_all_payment_methods(), flash
+                db.get_all_invoices(), db.get_all_payment_methods(),
+                db.get_all_upi_payments(), flash
             ))
             return
 
@@ -184,6 +188,26 @@ class CipherHandler(http.server.BaseHTTPRequestHandler):
             self._serve_html(analytics_page(
                 user, db.get_analytics_summary(), db.get_analytics()
             ))
+            return
+
+        if path == '/screenshot':
+            if not user or not user['is_admin']:
+                self._redirect('/login')
+                return
+            name = params.get('name', [''])[0]
+            filepath = upi_payment.get_screenshot_path(name)
+            if os.path.isfile(filepath):
+                ext = os.path.splitext(filepath)[1].lower()
+                mime = 'image/png' if ext == '.png' else 'image/jpeg'
+                with open(filepath, 'rb') as f:
+                    data = f.read()
+                self.send_response(200)
+                self.send_header('Content-Type', mime)
+                self.send_header('Content-Length', str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+            else:
+                self._serve_html('<div class="card">Screenshot not found.</div>')
             return
 
         # ── 404 ──
@@ -280,6 +304,128 @@ class CipherHandler(http.server.BaseHTTPRequestHandler):
             db.log_activity(user['id'], 'download', url)
             self.send_response(204)
             self.end_headers()
+            return
+
+        if path == '/verify-upi':
+            if not user:
+                self._redirect('/login')
+                return
+            content_type = self.headers.get('Content-Type', '')
+            if 'multipart/form-data' not in content_type:
+                self._redirect('/dashboard?flash=error:' + urllib.parse.quote('Invalid form submission.'))
+                return
+            # Extract boundary
+            boundary = None
+            for part in content_type.split(';'):
+                part = part.strip()
+                if part.startswith('boundary='):
+                    boundary = part[len('boundary='):]
+            if not boundary:
+                self._redirect('/dashboard?flash=error:' + urllib.parse.quote('Missing form boundary.'))
+                return
+            content_length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(content_length)
+            fields, files = upi_payment.parse_multipart(body, boundary)
+
+            try:
+                amount = float(fields.get('amount', '0'))
+                credits = int(fields.get('credits', '0'))
+            except ValueError:
+                self._redirect('/dashboard?flash=error:' + urllib.parse.quote('Invalid payment data.'))
+                return
+            ptype = fields.get('payment_type', '')
+            plan_key = fields.get('plan_key', '') or None
+            utr = fields.get('utr', '').strip()
+            sender_name = fields.get('sender_name', '').strip()
+            screenshot = files.get('screenshot')
+
+            # Validate
+            if not sender_name:
+                self._redirect('/dashboard?flash=error:' + urllib.parse.quote('Please enter your name.'))
+                return
+            valid, err = upi_payment.validate_utr(utr)
+            if not valid:
+                self._redirect('/dashboard?flash=error:' + urllib.parse.quote(err))
+                return
+            if not screenshot or not screenshot.get('data'):
+                self._redirect('/dashboard?flash=error:' + urllib.parse.quote('Please upload a payment screenshot.'))
+                return
+            if len(screenshot['data']) > upi_payment.MAX_FILE_SIZE:
+                self._redirect('/dashboard?flash=error:' + urllib.parse.quote('Screenshot too large (max 10MB).'))
+                return
+            if db.check_utr_exists(utr):
+                self._redirect('/dashboard?flash=error:' + urllib.parse.quote('This UTR has already been submitted.'))
+                return
+
+            # Save screenshot privately
+            filename = upi_payment.save_screenshot(
+                screenshot['data'], screenshot.get('filename', 'ss.png'), user['id']
+            )
+            screenshot_path = upi_payment.get_screenshot_path(filename)
+
+            # Create UPI payment record
+            payment_id = db.create_upi_payment(
+                user['id'], amount, credits, ptype, plan_key, utr, sender_name, filename
+            )
+
+            # Run AI verification
+            ai_result = ai_verifier.verify_screenshot(screenshot_path, amount, utr)
+            db.update_upi_ai_result(
+                payment_id,
+                ai_result['recommendation'],
+                ai_result['reason'],
+                ai_result['confidence']
+            )
+
+            print(f"[*] UPI payment submitted by {user['email']}: UTR={utr}, AI={ai_result['recommendation']}", flush=True)
+
+            if ai_result['recommendation'] == 'verified':
+                flash_msg = 'AI verified your payment! Admin will confirm shortly. Credits will be added after approval.'
+            elif ai_result['recommendation'] == 'suspicious':
+                flash_msg = 'AI flagged your payment for review. Admin will verify manually.'
+            elif ai_result['recommendation'] == 'rejected':
+                flash_msg = 'AI could not verify your payment. Admin will review manually.'
+            else:
+                flash_msg = 'Payment proof submitted! Admin will verify and add your credits shortly.'
+
+            self._redirect('/dashboard?flash=ok:' + urllib.parse.quote(flash_msg))
+            return
+
+        if path == '/admin/verify-upi':
+            if not user or not user['is_admin']:
+                self._redirect('/login')
+                return
+            try:
+                payment_id = int(body.get('payment_id', ['0'])[0])
+            except ValueError:
+                payment_id = 0
+            if payment_id > 0:
+                result = db.verify_upi_payment(payment_id)
+                if result:
+                    email_sender.send_invoice_email(
+                        result['user_email'], result['invoice_number'],
+                        result['amount'], result['details'], result['user_name']
+                    )
+                    self._redirect('/admin?flash=ok:' + urllib.parse.quote('UPI payment verified. Credits added & invoice emailed.'))
+                else:
+                    self._redirect('/admin?flash=error:' + urllib.parse.quote('Payment not found or already processed.'))
+            else:
+                self._redirect('/admin?flash=error:Invalid payment.')
+            return
+
+        if path == '/admin/reject-upi':
+            if not user or not user['is_admin']:
+                self._redirect('/login')
+                return
+            try:
+                payment_id = int(body.get('payment_id', ['0'])[0])
+            except ValueError:
+                payment_id = 0
+            if payment_id > 0:
+                db.reject_upi_payment(payment_id)
+                self._redirect('/admin?flash=ok:' + urllib.parse.quote('UPI payment rejected.'))
+            else:
+                self._redirect('/admin?flash=error:Invalid payment.')
             return
 
         if path == '/admin/create-giftcard':
