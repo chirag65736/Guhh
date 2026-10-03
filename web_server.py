@@ -458,8 +458,17 @@ class CipherHandler(http.server.BaseHTTPRequestHandler):
             print(f"[*] UPI payment submitted by {user['email']}: UTR={utr}, AI={ai_result['recommendation']}", flush=True)
 
             if ai_result['recommendation'] == 'verified':
-                flash_msg = 'AI verified your payment screenshot! Flagged for admin review — credits will be added shortly.'
-                print(f"[*] UPI payment AI-verified for {user['email']}, flagged for admin review (UTR={utr})", flush=True)
+                # Auto-approve: add credits + create invoice instantly
+                result = db.verify_upi_payment(payment_id)
+                if result:
+                    email_sender.send_invoice_email(
+                        result['user_email'], result['invoice_number'],
+                        result['amount'], result['details'], result['user_name']
+                    )
+                    print(f"[*] UPI payment AUTO-APPROVED for {user['email']}, credits added instantly (UTR={utr})", flush=True)
+                    self._redirect(f"/invoice?id={result['invoice_id']}")
+                    return
+                flash_msg = 'AI verified your payment! Credits added to your account.'
             elif ai_result['recommendation'] == 'suspicious':
                 flash_msg = 'AI flagged your payment for review. Admin will verify manually.'
             elif ai_result['recommendation'] == 'rejected':
