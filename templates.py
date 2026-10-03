@@ -408,7 +408,10 @@ textarea:focus { border-color:var(--cyan); box-shadow:0 0 0 3px rgba(0,229,255,.
     .reviews-grid { grid-template-columns: 1fr; gap: 14px; }
     .review-card { padding: 18px 14px; }
     .pay-card-3d { width: 280px; height: 180px; }
-    .verify-scanner { width: 200px; height: 200px; }
+    .upi-qr-frame { width: 180px; height: 180px; }
+    .upi-qr-inner { width: 150px; height: 150px; }
+    .upi-pulse-ring { width: 180px; height: 180px; }
+    .upi-coin-path { max-width: 80px; }
     .scan-steps { max-width: 100%; }
     .radar { width: 170px; height: 170px; }
 }
@@ -1139,25 +1142,49 @@ function startUpiVerify() {
     if (!form.checkValidity()) { form.reportValidity(); return false; }
 
     var overlay = document.getElementById('upiVerifyOverlay');
-    var scanner = document.getElementById('verifyScanner');
-    var check = document.getElementById('verifyCheck');
-    var steps = document.querySelectorAll('.verify-step');
-    overlay.classList.add('active');
-    scanner.style.display = 'block';
-    check.classList.remove('show');
-    steps.forEach(function(s) { s.classList.remove('active'); s.style.color = ''; });
+    var coinPhase = document.getElementById('upiCoinPhase');
+    var scanPhase = document.getElementById('upiScanPhase');
+    var successPhase = document.getElementById('upiSuccessPhase');
+    var s1 = document.getElementById('vstep1');
+    var s2 = document.getElementById('vstep2');
+    var s3 = document.getElementById('vstep3');
+    var s4 = document.getElementById('vstep4');
 
-    setTimeout(function() { steps[0].classList.add('active'); }, 300);
-    setTimeout(function() { steps[0].classList.remove('active'); steps[1].classList.add('active'); }, 1600);
-    setTimeout(function() { steps[1].classList.remove('active'); steps[2].classList.add('active'); }, 2900);
+    function resetSteps() { [s1,s2,s3,s4].forEach(function(s){ s.classList.remove('active'); s.style.color=''; }); }
+
+    overlay.classList.add('active');
+    coinPhase.style.display = 'block';
+    scanPhase.style.display = 'none';
+    successPhase.style.display = 'none';
+    resetSteps();
+
+    // Phase 1: Coin transfer + upload
+    setTimeout(function() { s1.classList.add('active'); }, 200);
+
+    // Phase 2: AI scan
     setTimeout(function() {
-        steps[2].classList.remove('active');
-        scanner.style.display = 'none';
-        check.classList.add('show');
-        steps[3].classList.add('active');
-        steps[3].style.color = 'var(--green)';
-    }, 4000);
-    setTimeout(function() { form.submit(); }, 5000);
+        s1.classList.remove('active');
+        coinPhase.style.display = 'none';
+        scanPhase.style.display = 'block';
+        s2.classList.add('active');
+    }, 1800);
+
+    // Phase 3: Verifying
+    setTimeout(function() {
+        s2.classList.remove('active');
+        s3.classList.add('active');
+    }, 3200);
+
+    // Phase 4: Success
+    setTimeout(function() {
+        s3.classList.remove('active');
+        scanPhase.style.display = 'none';
+        successPhase.style.display = 'block';
+        s4.classList.add('active');
+        s4.style.color = 'var(--green)';
+    }, 4200);
+
+    setTimeout(function() { form.submit(); }, 5500);
     return false;
 }
 """
@@ -1224,10 +1251,21 @@ def payment_page(user, payment_type, plan_key=None, payment_methods=None):
                 <span style="font-family:'JetBrains Mono',monospace;font-size:1.05rem;font-weight:800;color:var(--cyan);letter-spacing:1px;text-shadow:0 0 20px rgba(0,229,255,.4);">{UPI_ID}</span>
                 <button class="copy-btn" onclick="copyUpi()" style="background:rgba(0,229,255,.15);border:1px solid rgba(0,229,255,.4);color:var(--cyan);padding:5px 12px;border-radius:8px;font-family:'JetBrains Mono',monospace;font-size:.7rem;cursor:pointer;transition:all .3s;">📝 Copy</button>
             </div>
-            <div style="position:relative;width:180px;height:180px;margin:0 auto 14px;border-radius:14px;overflow:hidden;border:2px solid rgba(0,229,255,.3);">
-                <img src="{qr_url}" alt="UPI QR Code" style="width:100%;height:100%;">
-                <div style="position:absolute;left:0;right:0;height:3px;background:linear-gradient(90deg,transparent,var(--cyan),transparent);box-shadow:0 0 15px var(--cyan);animation:qrScan 2.5s ease-in-out infinite;"></div>
+            <div class="upi-qr-frame">
+                <div class="upi-qr-glow"></div>
+                <div class="upi-qr-corner tl"></div>
+                <div class="upi-qr-corner tr"></div>
+                <div class="upi-qr-corner bl"></div>
+                <div class="upi-qr-corner br"></div>
+                <div class="upi-qr-inner">
+                    <img src="{qr_url}" alt="UPI QR Code" style="width:100%;height:100%;border-radius:8px;">
+                    <div class="upi-qr-scanline"></div>
+                </div>
+                <div class="upi-pulse-ring r1"></div>
+                <div class="upi-pulse-ring r2"></div>
+                <div class="upi-pulse-ring r3"></div>
             </div>
+            <div class="upi-amt-badge"><b style="color:var(--green);">₹{amount}</b></div>
             <p style="color:var(--dim);font-size:.78rem;margin-bottom:16px;">Scan QR or copy UPI ID · Pay <b style="color:var(--green);">₹{amount}</b></p>
             <button class="btn btn-green btn-block" onclick="showUpload()" style="animation:pulse 2s infinite;">✔ I've Paid — Submit Proof</button>
         </div>
@@ -1288,17 +1326,58 @@ def payment_page(user, payment_type, plan_key=None, payment_methods=None):
 
     <!-- UPI AI Verification Animation -->
     <div class="upi-verify-overlay" id="upiVerifyOverlay">
-        <div style="text-align:center;">
-            <div class="verify-scanner" id="verifyScanner" style="display:none;">
-                <div class="scan-grid"></div>
+        <div class="upi-pay-anim">
+            <!-- Phase 1: Coin transfer animation -->
+            <div class="upi-coin-phase" id="upiCoinPhase">
+                <div class="upi-coin-track">
+                    <div class="upi-coin-sender">
+                        <div class="upi-coin-icon">₹</div>
+                        <div class="upi-coin-label">YOU</div>
+                    </div>
+                    <div class="upi-coin-path">
+                        <div class="upi-coin-dot d1"></div>
+                        <div class="upi-coin-dot d2"></div>
+                        <div class="upi-coin-dot d3"></div>
+                        <div class="upi-coin-dot d4"></div>
+                        <div class="upi-coin-dot d5"></div>
+                    </div>
+                    <div class="upi-coin-receiver">
+                        <div class="upi-coin-icon" style="background:linear-gradient(135deg,var(--magenta),#7c3aed);">◈</div>
+                        <div class="upi-coin-label">CIPHER</div>
+                    </div>
+                </div>
+                <div class="upi-amt-fly" id="upiAmtFly">₹{amount}</div>
             </div>
-            <div class="verify-check" id="verifyCheck" style="display:none;width:80px;height:80px;margin:20px auto;border-radius:50%;background:rgba(0,255,156,.15);border:3px solid var(--green);align-items:center;justify-content:center;">
-                <svg viewBox="0 0 52 52" style="width:40px;height:40px;"><path class="check-path" d="M14 27 L22 35 L38 17" style="stroke:var(--green);stroke-width:4;fill:none;stroke-dasharray:50;stroke-dashoffset:50;animation:drawCheck .5s ease .2s forwards;"/></svg>
+            <!-- Phase 2: AI scan animation -->
+            <div class="upi-scan-phase" id="upiScanPhase" style="display:none;">
+                <div class="upi-ai-orb">
+                    <div class="upi-ai-ring r1"></div>
+                    <div class="upi-ai-ring r2"></div>
+                    <div class="upi-ai-ring r3"></div>
+                    <div class="upi-ai-core">🧠</div>
+                </div>
             </div>
-            <div class="verify-step" style="font-family:'JetBrains Mono',monospace;font-size:.85rem;letter-spacing:2px;color:var(--cyan);margin-top:16px;opacity:0;transition:opacity .3s;">🛰 Scanning Screenshot...</div>
-            <div class="verify-step" style="font-family:'JetBrains Mono',monospace;font-size:.85rem;letter-spacing:2px;color:var(--cyan);margin-top:16px;opacity:0;transition:opacity .3s;">📝 Extracting UTR Number...</div>
-            <div class="verify-step" style="font-family:'JetBrains Mono',monospace;font-size:.85rem;letter-spacing:2px;color:var(--cyan);margin-top:16px;opacity:0;transition:opacity .3s;">✔ Verifying Transaction...</div>
-            <div class="verify-step" style="font-family:'JetBrains Mono',monospace;font-size:.85rem;letter-spacing:2px;color:var(--cyan);margin-top:16px;opacity:0;transition:opacity .3s;">☑ AI Verification Complete!</div>
+            <!-- Phase 3: Success -->
+            <div class="upi-success-phase" id="upiSuccessPhase" style="display:none;">
+                <div class="upi-success-burst">
+                    <div class="upi-burst-ray" style="transform:rotate(0deg);"></div>
+                    <div class="upi-burst-ray" style="transform:rotate(45deg);"></div>
+                    <div class="upi-burst-ray" style="transform:rotate(90deg);"></div>
+                    <div class="upi-burst-ray" style="transform:rotate(135deg);"></div>
+                    <div class="upi-burst-ray" style="transform:rotate(180deg);"></div>
+                    <div class="upi-burst-ray" style="transform:rotate(225deg);"></div>
+                    <div class="upi-burst-ray" style="transform:rotate(270deg);"></div>
+                    <div class="upi-burst-ray" style="transform:rotate(315deg);"></div>
+                </div>
+                <div class="upi-success-check">
+                    <svg viewBox="0 0 52 52" style="width:44px;height:44px;"><path d="M14 27 L22 35 L38 17" style="stroke:var(--green);stroke-width:5;fill:none;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:50;stroke-dashoffset:50;animation:drawCheck .5s ease .2s forwards;"/></svg>
+                </div>
+            </div>
+            <!-- Steps text -->
+            <div class="verify-step" id="vstep1">🛰 Uploading Screenshot...</div>
+            <div class="verify-step" id="vstep2">🧠 AI Analyzing Payment...</div>
+            <div class="verify-step" id="vstep3">✔ Verifying Transaction...</div>
+            <div class="verify-step" id="vstep4">☑ Verification Complete!</div>
         </div>
     </div>"""
 
@@ -1307,10 +1386,140 @@ def payment_page(user, payment_type, plan_key=None, payment_methods=None):
 @keyframes pulse {{ 0%,100% {{ box-shadow:0 0 0 0 rgba(0,255,156,.4); }} 50% {{ box-shadow:0 0 0 8px rgba(0,255,156,0); }} }}
 .pay-overlay,.upi-verify-overlay {{ position:fixed;inset:0;z-index:999;display:none;align-items:center;justify-content:center;background:rgba(5,6,10,.95);backdrop-filter:blur(20px); }}
 .pay-overlay.active,.upi-verify-overlay.active {{ display:flex; }}
-.verify-scanner {{ width:240px;height:240px;margin:0 auto 20px;position:relative;border-radius:16px;overflow:hidden;border:2px solid var(--cyan);background:rgba(0,229,255,.05); }}
-.verify-scanner::before {{ content:'';position:absolute;left:0;right:0;height:4px;background:linear-gradient(90deg,transparent,var(--cyan),var(--magenta),transparent);box-shadow:0 0 20px var(--cyan);animation:qrScan 1.5s ease-in-out infinite; }}
-.scan-grid {{ position:absolute;inset:0;background-image:linear-gradient(rgba(0,229,255,.1) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,255,.1) 1px,transparent 1px);background-size:20px 20px; }}
+.verify-step {{ font-family:'JetBrains Mono',monospace;font-size:.85rem;letter-spacing:2px;color:var(--cyan);margin-top:14px;opacity:0;transition:opacity .4s; }}
 .verify-step.active {{ opacity:1 !important; }}
+
+/* ── New UPI QR animation ── */
+.upi-qr-frame {{
+    position:relative;width:200px;height:200px;margin:0 auto 14px;
+    display:flex;align-items:center;justify-content:center;
+}}
+.upi-qr-glow {{
+    position:absolute;inset:-20px;border-radius:50%;
+    background:radial-gradient(circle,rgba(0,229,255,.15),transparent 70%);
+    animation:upiGlow 3s ease-in-out infinite;
+}}
+@keyframes upiGlow {{ 0%,100%{{opacity:.5;transform:scale(1);}} 50%{{opacity:1;transform:scale(1.1);}} }}
+.upi-qr-corner {{
+    position:absolute;width:28px;height:28px;border:3px solid var(--cyan);
+    box-shadow:0 0 12px rgba(0,229,255,.4);
+}}
+.upi-qr-corner.tl {{ top:0;left:0;border-right:none;border-bottom:none;border-radius:8px 0 0 0; }}
+.upi-qr-corner.tr {{ top:0;right:0;border-left:none;border-bottom:none;border-radius:0 8px 0 0; }}
+.upi-qr-corner.bl {{ bottom:0;left:0;border-right:none;border-top:none;border-radius:0 0 0 8px; }}
+.upi-qr-corner.br {{ bottom:0;right:0;border-left:none;border-top:none;border-radius:0 0 8px 0; }}
+.upi-qr-inner {{
+    width:170px;height:170px;border-radius:10px;overflow:hidden;
+    border:1px solid rgba(0,229,255,.2);position:relative;
+    background:#fff;
+}}
+.upi-qr-scanline {{
+    position:absolute;left:0;right:0;height:3px;
+    background:linear-gradient(90deg,transparent,var(--cyan),var(--magenta),transparent);
+    box-shadow:0 0 15px var(--cyan);
+    animation:qrScan 2.5s ease-in-out infinite;
+}}
+.upi-pulse-ring {{
+    position:absolute;border-radius:50%;border:2px solid rgba(0,229,255,.3);
+    width:200px;height:200px;opacity:0;
+}}
+.upi-pulse-ring.r1 {{ animation:upiPulse 2s ease-out infinite; }}
+.upi-pulse-ring.r2 {{ animation:upiPulse 2s ease-out infinite .6s; }}
+.upi-pulse-ring.r3 {{ animation:upiPulse 2s ease-out infinite 1.2s; }}
+@keyframes upiPulse {{
+    0% {{ transform:scale(1);opacity:.6; }}
+    100% {{ transform:scale(1.6);opacity:0; }}
+}}
+.upi-amt-badge {{
+    display:inline-block;margin-top:8px;padding:4px 16px;border-radius:20px;
+    background:rgba(0,255,156,.1);border:1px solid rgba(0,255,156,.3);
+    font-family:'JetBrains Mono',monospace;font-size:1rem;letter-spacing:1px;
+    animation:upiGlow 2s ease-in-out infinite;
+}}
+
+/* ── New UPI payment submit animation ── */
+.upi-pay-anim {{ text-align:center;max-width:320px; }}
+.upi-coin-phase {{ padding:20px 0; }}
+.upi-coin-track {{ display:flex;align-items:center;justify-content:center;gap:0; }}
+.upi-coin-sender,.upi-coin-receiver {{
+    display:flex;flex-direction:column;align-items:center;gap:6px;z-index:2;
+}}
+.upi-coin-icon {{
+    width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    font-family:'JetBrains Mono',monospace;font-size:1.4rem;font-weight:800;color:#05060a;
+    background:linear-gradient(135deg,var(--cyan),var(--green));
+    box-shadow:0 0 20px rgba(0,229,255,.4);
+}}
+.upi-coin-label {{
+    font-family:'JetBrains Mono',monospace;font-size:.62rem;letter-spacing:2px;color:var(--dim);
+}}
+.upi-coin-path {{
+    flex:1;height:2px;position:relative;margin:0 -6px;max-width:120px;
+    background:linear-gradient(90deg,rgba(0,229,255,.2),rgba(255,43,214,.2));
+}}
+.upi-coin-dot {{
+    position:absolute;top:50%;width:8px;height:8px;border-radius:50%;
+    background:var(--cyan);box-shadow:0 0 10px var(--cyan);
+    transform:translateY(-50%);
+}}
+.upi-coin-dot.d1 {{ animation:coinFly 1.2s linear infinite; animation-delay:0s; }}
+.upi-coin-dot.d2 {{ animation:coinFly 1.2s linear infinite; animation-delay:.24s; }}
+.upi-coin-dot.d3 {{ animation:coinFly 1.2s linear infinite; animation-delay:.48s; }}
+.upi-coin-dot.d4 {{ animation:coinFly 1.2s linear infinite; animation-delay:.72s; }}
+.upi-coin-dot.d5 {{ animation:coinFly 1.2s linear infinite; animation-delay:.96s; }}
+@keyframes coinFly {{
+    0% {{ left:0;opacity:0;transform:translateY(-50%) scale(.5); }}
+    15% {{ opacity:1;transform:translateY(-50%) scale(1); }}
+    85% {{ opacity:1; }}
+    100% {{ left:100%;opacity:0;transform:translateY(-50%) scale(.5); }}
+}}
+.upi-amt-fly {{
+    margin-top:18px;font-family:'JetBrains Mono',monospace;font-size:1.6rem;font-weight:800;
+    color:var(--green);text-shadow:0 0 20px rgba(0,255,156,.4);
+    animation:amtPulse 1s ease-in-out infinite;
+}}
+@keyframes amtPulse {{ 0%,100%{{transform:scale(1);}} 50%{{transform:scale(1.08);}} }}
+
+/* AI orb phase */
+.upi-scan-phase {{ padding:20px 0; }}
+.upi-ai-orb {{
+    width:120px;height:120px;margin:0 auto;position:relative;
+    display:flex;align-items:center;justify-content:center;
+}}
+.upi-ai-ring {{
+    position:absolute;border-radius:50%;border:2px solid transparent;
+    border-top-color:var(--cyan);border-right-color:var(--magenta);
+}}
+.upi-ai-ring.r1 {{ width:120px;height:120px;animation:aiSpin 1.5s linear infinite; }}
+.upi-ai-ring.r2 {{ width:90px;height:90px;border-top-color:var(--magenta);border-right-color:var(--cyan);animation:aiSpin 1.2s linear infinite reverse; }}
+.upi-ai-ring.r3 {{ width:60px;height:60px;border-top-color:var(--green);animation:aiSpin 1s linear infinite; }}
+@keyframes aiSpin {{ to {{ transform:rotate(360deg); }} }}
+.upi-ai-core {{ font-size:2rem;animation:aiCorePulse 1s ease-in-out infinite; }}
+@keyframes aiCorePulse {{ 0%,100%{{transform:scale(1);}} 50%{{transform:scale(1.2);}} }}
+
+/* Success phase */
+.upi-success-phase {{ padding:20px 0;position:relative; }}
+.upi-success-burst {{
+    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    width:120px;height:120px;pointer-events:none;
+}}
+.upi-burst-ray {{
+    position:absolute;top:50%;left:50%;width:60px;height:3px;
+    background:linear-gradient(90deg,var(--green),transparent);
+    transform-origin:left center;
+    animation:burstRay .6s ease-out forwards;opacity:0;
+}}
+@keyframes burstRay {{
+    0% {{ opacity:0;transform:translateY(-50%) scaleX(0); }}
+    50% {{ opacity:1;transform:translateY(-50%) scaleX(1); }}
+    100% {{ opacity:0;transform:translateY(-50%) scaleX(1.3); }}
+}}
+.upi-success-check {{
+    width:80px;height:80px;margin:0 auto;border-radius:50%;
+    background:rgba(0,255,156,.15);border:3px solid var(--green);
+    display:flex;align-items:center;justify-content:center;
+    animation:popIn .5s ease;position:relative;z-index:2;
+}}
 </style>
 <script>{PAYMENT_JS}</script>"""
     return base_page(f"Cipher · Payment · ₹{amount}", body, user, extra)
