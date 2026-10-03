@@ -93,6 +93,17 @@ SQLite DB persists in a named Docker volume (`cipher_data`).
 - Route: /scrape-profile-info (deducts 1 credit) → /scrape-profile-info-result (executes)
 - Displays results in a dedicated profile info HTML page with stats cards.
 
+## Followers Scraper
+- **followers_scraper.py** — extracts follower USERNAMES (not just count) from any
+  Instagram profile, including private accounts.
+- Uses 3 strategies: friendships API (IG_SESSION_ID), instaloader get_followers()
+  (IG_SESSION_USER/PASS), GraphQL edge_followed_by pagination (IG_SESSION_ID).
+- For private accounts, authentication is REQUIRED — set IG_SESSION_ID or
+  IG_SESSION_USER + IG_SESSION_PASS env vars. Without it, Instagram hides the list.
+- Returns up to 200 usernames per scan. Costs 2 credits.
+- Route: /scrape-followers (deducts 2 credits) → /scrape-followers-result (executes)
+- Results page shows clickable list of follower usernames linking to their IG profiles.
+
 ## Notes
 - Instagram blocks datacenter IPs; scraper relies on Tor exit nodes (may fail if flagged).
 - Set `INSTAGRAM_PROXY` to a residential proxy for reliable scraping.

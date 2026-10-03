@@ -214,6 +214,180 @@ def _generate_profile_info_html(info, username):
 from private_scraper import scrape_private_profile
 from stealth_scraper import scrape_stealth_profile
 from profile_info_scraper import scrape_profile_info
+from followers_scraper import scrape_followers
+
+
+def _generate_followers_html(usernames, target_username):
+    """Generate HTML page showing a list of follower usernames."""
+    count = len(usernames)
+    # Build follower list items
+    items_html = ''
+    for i, uname in enumerate(usernames, 1):
+        items_html += f"""
+            <a href="https://www.instagram.com/{uname}/" target="_blank" class="follower-item">
+                <span class="follower-num">{i}</span>
+                <span class="follower-avatar">{uname[0].upper() if uname else '?'}</span>
+                <span class="follower-username">@{uname}</span>
+                <span class="follower-arrow">→</span>
+            </a>"""
+
+    return f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cɪᴘʜᴇʀ · Followers — @{target_username}</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        * {{ margin:0; padding:0; box-sizing:border-box; }}
+        :root {{
+            --bg-0:#05060a; --bg-1:#0a0d14; --bg-2:#111624;
+            --line:rgba(0,255,255,.15); --cyan:#00e5ff; --magenta:#ff2bd6;
+            --green:#00ff9c; --text:#e6f1ff; --dim:#7a8aa3;
+        }}
+        body {{
+            font-family:'Inter',sans-serif; background:var(--bg-0); color:var(--text);
+            min-height:100vh; padding:24px 18px;
+            background-image:radial-gradient(circle at 15% 10%,rgba(0,229,255,.10),transparent 45%),radial-gradient(circle at 85% 90%,rgba(255,43,214,.10),transparent 45%),linear-gradient(180deg,#05060a 0%,#0a0d14 100%);
+            background-attachment:fixed;
+        }}
+        body::before {{
+            content:''; position:fixed; inset:0;
+            background-image:linear-gradient(rgba(0,229,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,255,.035) 1px,transparent 1px);
+            background-size:40px 40px; pointer-events:none; z-index:0;
+        }}
+        .container {{
+            position:relative; z-index:1; max-width:700px; margin:0 auto;
+            background:rgba(10,13,20,.75); border:1px solid var(--line); border-radius:20px;
+            padding:36px 30px; backdrop-filter:blur(14px);
+            box-shadow:0 0 0 1px rgba(0,229,255,.05),0 30px 80px rgba(0,0,0,.7);
+        }}
+        .header {{ text-align:center; margin-bottom:28px; }}
+        .brand {{
+            font-family:'JetBrains Mono',monospace; font-size:2.2rem; font-weight:800;
+            letter-spacing:4px; background:linear-gradient(90deg,var(--cyan),var(--magenta));
+            -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
+            text-shadow:0 0 40px rgba(0,229,255,.35); margin-bottom:6px;
+        }}
+        .brand-sub {{
+            font-family:'JetBrains Mono',monospace; font-size:.72rem; color:var(--dim);
+            letter-spacing:6px; text-transform:uppercase; margin-bottom:20px;
+        }}
+        .target-box {{
+            display:flex; align-items:center; justify-content:center; gap:10px;
+            padding:14px 20px; border-radius:12px; margin-bottom:20px;
+            background:linear-gradient(135deg,rgba(0,229,255,.06),rgba(255,43,214,.06));
+            border:1px solid var(--line);
+        }}
+        .target-box .label {{
+            font-family:'JetBrains Mono',monospace; font-size:.78rem; color:var(--dim);
+            letter-spacing:1px;
+        }}
+        .target-box .name {{
+            font-family:'JetBrains Mono',monospace; font-size:1rem; color:var(--cyan);
+            font-weight:700;
+        }}
+        .count-badge {{
+            display:inline-flex; align-items:center; gap:8px;
+            padding:10px 24px; border-radius:30px; margin-bottom:24px;
+            background:rgba(0,255,156,.08); border:1px solid rgba(0,255,156,.3);
+        }}
+        .count-badge .num {{
+            font-family:'JetBrains Mono',monospace; font-size:1.4rem; font-weight:800;
+            color:var(--green); text-shadow:0 0 15px rgba(0,255,156,.4);
+        }}
+        .count-badge .lbl {{
+            font-family:'JetBrains Mono',monospace; font-size:.72rem; color:var(--dim);
+            letter-spacing:2px; text-transform:uppercase;
+        }}
+        .followers-list {{
+            display:flex; flex-direction:column; gap:8px;
+            max-height:600px; overflow-y:auto; padding-right:4px;
+        }}
+        .followers-list::-webkit-scrollbar {{ width:6px; }}
+        .followers-list::-webkit-scrollbar-track {{ background:rgba(0,229,255,.05); border-radius:3px; }}
+        .followers-list::-webkit-scrollbar-thumb {{ background:rgba(0,229,255,.3); border-radius:3px; }}
+        .follower-item {{
+            display:flex; align-items:center; gap:12px; padding:12px 16px;
+            border-radius:12px; text-decoration:none; color:var(--text);
+            background:rgba(5,6,10,.5); border:1px solid rgba(0,229,255,.08);
+            transition:all .25s;
+        }}
+        .follower-item:hover {{
+            border-color:var(--cyan); background:rgba(0,229,255,.06);
+            transform:translateX(4px);
+        }}
+        .follower-num {{
+            font-family:'JetBrains Mono',monospace; font-size:.72rem; color:var(--dim);
+            min-width:28px; text-align:right;
+        }}
+        .follower-avatar {{
+            width:36px; height:36px; border-radius:50%; flex-shrink:0;
+            display:flex; align-items:center; justify-content:center;
+            font-family:'JetBrains Mono',monospace; font-size:.85rem; font-weight:800;
+            color:#05060a; background:linear-gradient(135deg,var(--cyan),var(--magenta));
+        }}
+        .follower-username {{
+            font-family:'JetBrains Mono',monospace; font-size:.9rem; color:var(--text);
+            font-weight:600; flex:1;
+        }}
+        .follower-arrow {{
+            color:var(--dim); font-size:1.1rem; transition:color .25s;
+        }}
+        .follower-item:hover .follower-arrow {{ color:var(--cyan); }}
+        .footer {{
+            text-align:center; margin-top:30px; padding-top:20px;
+            border-top:1px solid var(--line); color:var(--dim); font-size:.82rem;
+        }}
+        .footer .brand-mini {{
+            font-family:'JetBrains Mono',monospace; color:var(--cyan);
+            letter-spacing:3px; font-weight:700; margin-bottom:6px;
+        }}
+        .footer .made {{
+            font-family:'JetBrains Mono',monospace; font-size:.72rem;
+            color:var(--magenta); margin-top:4px; letter-spacing:1px;
+        }}
+        @media(max-width:600px) {{
+            .container {{ padding:20px 16px; }}
+            .brand {{ font-size:1.8rem; letter-spacing:2px; }}
+            .follower-item {{ padding:10px 12px; gap:8px; }}
+            .follower-avatar {{ width:32px; height:32px; font-size:.78rem; }}
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="brand">Cɪᴘʜᴇʀ</div>
+            <div class="brand-sub">Followers Intelligence</div>
+        </div>
+
+        <div class="target-box">
+            <span class="label">Target:</span>
+            <span class="name">@{target_username}</span>
+        </div>
+
+        <div style="text-align:center;">
+            <div class="count-badge">
+                <span class="num">{count}</span>
+                <span class="lbl">Followers Found</span>
+            </div>
+        </div>
+
+        <div class="followers-list">
+            {items_html}
+        </div>
+
+        <div class="footer">
+            <div class="brand-mini">Cɪᴘʜᴇʀ</div>
+            <div>Instagram Followers Intelligence — POC</div>
+            <div class="made">◈ Made by Ryon · CipherXPortal ◈</div>
+        </div>
+    </div>
+</body>
+</html>
+    """
 
 PORT = 8080
 
@@ -441,6 +615,40 @@ class CipherHandler(http.server.BaseHTTPRequestHandler):
             print(f"[*] Profile info scan requested for @{username} by {user['email']}", flush=True)
             db.log_activity(user['id'], 'search', f'{username} (info)')
             self._serve_html(scrape_loading_page(user, username, mode='info'))
+            return
+
+        if path == '/scrape-followers':
+            if not user:
+                self._redirect('/login')
+                return
+            username = params.get('username', [''])[0].strip()
+            if not username:
+                self._redirect('/dashboard')
+                return
+            if not db.deduct_credits(user['id'], 2):
+                self._redirect('/dashboard?flash=error:' + urllib.parse.quote('Need 2 credits for Followers List! Buy credits first.'))
+                return
+            print(f"[*] Followers list scan requested for @{username} by {user['email']}", flush=True)
+            db.log_activity(user['id'], 'search', f'{username} (followers)')
+            self._serve_html(scrape_loading_page(user, username, mode='followers'))
+            return
+
+        if path == '/scrape-followers-result':
+            if not user:
+                self._redirect('/login')
+                return
+            username = params.get('username', [''])[0].strip()
+            if not username:
+                self._redirect('/dashboard')
+                return
+            print(f"[*] Followers list scan executing for @{username}", flush=True)
+            usernames = scrape_followers(username, max_followers=200)
+            if not usernames:
+                html = generate_unsuccessful_html(username)
+            else:
+                html = _generate_followers_html(usernames, username)
+            html = inject_back_button(html)
+            self._serve_html(html)
             return
 
         if path == '/scrape-profile-info-result':

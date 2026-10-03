@@ -860,6 +860,13 @@ def dashboard_page(user, flash=None, reviews=None):
                 <button type="submit" class="btn btn-outline" style="border-color:#00ff9c;color:#00ff9c;">🔍 Profile Info</button>
             </form>
         </div>
+        <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--line);">
+            <p style="color:var(--dim);font-size:.78rem;margin-bottom:12px;">👥 <b style="color:#7c3aed;">Followers List</b> — extracts the <b>usernames of followers</b> from any profile (including private). Returns up to <b>200 usernames</b>. <b style="color:#7c3aed;">2 credits</b> per scan. <span style="color:var(--gold);">⚠ Requires IG_SESSION_ID or IG_SESSION_USER/PASS for private accounts.</span></p>
+            <form action="/scrape-followers" method="get" style="display:flex;gap:12px;flex-wrap:wrap;">
+                <input type="text" name="username" placeholder="Instagram username..." required style="flex:1;min-width:200px;" autocomplete="off">
+                <button type="submit" class="btn btn-outline" style="border-color:#7c3aed;color:#7c3aed;">👥 Followers List</button>
+            </form>
+        </div>
     </div>"""
 
     # Per-post payment
@@ -933,6 +940,11 @@ def scrape_loading_page(user, username, mode='quick'):
         mode_label = 'Profile Info Scan'
         mode_color = '#00ff9c'
         mode_icon = '🔍'
+    elif mode == 'followers':
+        api_url = f"/scrape-followers-result?username={urllib.parse.quote(username)}"
+        mode_label = 'Followers List Scan'
+        mode_color = '#7c3aed'
+        mode_icon = '👥'
     else:
         api_url = f"/scrape-private-result?username={urllib.parse.quote(username)}"
         mode_label = 'Private Deep Scan'
