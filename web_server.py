@@ -91,7 +91,7 @@ class CipherHandler(http.server.BaseHTTPRequestHandler):
 
         # ── Public routes ──
         if path == '/':
-            self._serve_html(landing_page(user))
+            self._serve_html(landing_page(user, db.get_reviews()))
             return
 
         if path == '/login':
@@ -135,7 +135,7 @@ class CipherHandler(http.server.BaseHTTPRequestHandler):
                 self._redirect('/login')
                 return
             flash = params.get('flash', [None])[0]
-            self._serve_html(dashboard_page(user, flash))
+            self._serve_html(dashboard_page(user, flash, db.get_reviews()))
             return
 
         if path == '/scrape':
@@ -365,6 +365,23 @@ class CipherHandler(http.server.BaseHTTPRequestHandler):
             db.log_activity(user['id'], 'download', url)
             self.send_response(204)
             self.end_headers()
+            return
+
+        if path == '/submit-review':
+            name = body.get('name', [''])[0].strip()
+            text = body.get('text', [''])[0].strip()
+            try:
+                rating = int(body.get('rating', ['5'])[0])
+            except ValueError:
+                rating = 5
+            if not name or not text:
+                self._redirect('/?flash=error:' + urllib.parse.quote('Name and review text are required.'))
+                return
+            rating = max(1, min(5, rating))
+            db.add_review(name, rating, text)
+            # Redirect back to where the user came from
+            referer = self.headers.get('Referer', '/')
+            self._redirect(referer)
             return
 
         if path == '/verify-upi':

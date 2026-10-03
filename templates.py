@@ -341,6 +341,13 @@ tr:hover td { background: rgba(0,229,255,.04); }
     font-family:'JetBrains Mono',monospace; font-size:.85rem; font-weight:800; color:#05060a;
 }
 .review-name { font-family:'JetBrains Mono',monospace; font-size:.78rem; color:var(--cyan); letter-spacing:1px; }
+/* star rating picker */
+.star-rating { display:flex; gap:6px; font-size:1.8rem; }
+.star-rating .star { cursor:pointer; color:var(--dim); transition:color .2s,transform .2s; user-select:none; }
+.star-rating .star.active { color:var(--gold); text-shadow:0 0 10px rgba(255,215,0,.4); }
+.star-rating .star:hover { transform:scale(1.2); }
+textarea { width:100%; padding:14px 16px; background:rgba(5,6,10,.8); border:1px solid var(--line); border-radius:10px; color:var(--text); font-family:'JetBrains Mono',monospace; font-size:.9rem; outline:none; transition:border-color .3s,box-shadow .3s; resize:vertical; }
+textarea:focus { border-color:var(--cyan); box-shadow:0 0 0 3px rgba(0,229,255,.12); }
 /* mobile nav toggle */
 .nav-toggle {
     display: none; background: none; border: none; cursor: pointer;
@@ -437,6 +444,69 @@ SCAN_ICON = '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" xmlns
 
 DEEP_ICON = '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle;"><defs><linearGradient id="dgrd1" x1="0" y1="0" x2="24" y2="24"><stop offset="0" stop-color="#ff2bd6"/><stop offset="1" stop-color="#7c3aed"/></linearGradient></defs><circle cx="12" cy="12" r="11" fill="rgba(255,43,214,.06)" stroke="url(#dgrd1)" stroke-width="1.5"/><path d="M12 5 L17 8.5 V15.5 L12 19 L7 15.5 V8.5 Z" fill="none" stroke="url(#dgrd1)" stroke-width="1.2"/><circle cx="10" cy="10" r="3.5" fill="none" stroke="url(#dgrd1)" stroke-width="1.6"/><path d="M12.5 12.5 L16 16" stroke="url(#dgrd1)" stroke-width="1.8" stroke-linecap="round"/></svg>'
 
+# ── Reviews section (reusable, shown at bottom of pages) ──────
+
+REVIEW_JS = """
+<script>
+(function() {
+    var stars = document.querySelectorAll('#starRating .star');
+    var ratingValue = document.getElementById('ratingValue');
+    if (!stars.length) return;
+    stars.forEach(function(s) { s.classList.add('active'); });
+    stars.forEach(function(s) {
+        s.addEventListener('click', function() {
+            var val = parseInt(this.getAttribute('data-val'));
+            ratingValue.value = val;
+            stars.forEach(function(s2) {
+                if (parseInt(s2.getAttribute('data-val')) <= val) { s2.classList.add('active'); }
+                else { s2.classList.remove('active'); }
+            });
+        });
+    });
+})();
+</script>"""
+
+
+def reviews_section(reviews, user=None):
+    cards = ''
+    for r in reviews:
+        stars_filled = '\u2605' * r['rating']
+        stars_empty = '\u2606' * (5 - r['rating'])
+        initial = (r['name'] or 'U')[0].upper()
+        cards += f"""
+            <div class="review-card">
+                <div class="review-stars">{stars_filled}{stars_empty}</div>
+                <p class="review-text">"{r['text']}"</p>
+                <div class="review-user"><span class="review-avatar" style="background:linear-gradient(135deg,#00e5ff,#7c3aed);">{initial}</span><span class="review-name">@{r['name']}</span></div>
+            </div>"""
+    default_name = user['name'] if user else ''
+    return f"""
+    <div class="card" style="margin-top:24px;">
+        <h2 style="text-align:center;">\U0001F4AC User Reviews</h2>
+        <p style="text-align:center;color:var(--dim);font-size:.82rem;margin-bottom:24px;">\u2B50\u2B50\u2B50\u2B50\u2B50 Trusted by 2,400+ users</p>
+        <div style="text-align:center;margin-bottom:24px;">
+            <button class="btn btn-outline" onclick="var f=document.getElementById('reviewForm');f.style.display=f.style.display=='none'?'block':'none';">\u270D Add Review</button>
+        </div>
+        <form id="reviewForm" action="/submit-review" method="post" style="display:none;max-width:440px;margin:0 auto 28px;background:rgba(17,22,36,.8);border:1px solid var(--line);border-radius:14px;padding:22px 18px;">
+            <div class="field"><label>Your Name</label><input type="text" name="name" required placeholder="Your name" value="{default_name}"></div>
+            <div class="field"><label>Rating</label>
+                <div class="star-rating" id="starRating">
+                    <span class="star" data-val="1">\u2605</span>
+                    <span class="star" data-val="2">\u2605</span>
+                    <span class="star" data-val="3">\u2605</span>
+                    <span class="star" data-val="4">\u2605</span>
+                    <span class="star" data-val="5">\u2605</span>
+                    <input type="hidden" name="rating" id="ratingValue" value="5">
+                </div>
+            </div>
+            <div class="field"><label>Review</label><textarea name="text" required placeholder="Write your review..." rows="3"></textarea></div>
+            <button type="submit" class="btn btn-primary btn-block">Submit Review</button>
+        </form>
+        <div class="reviews-grid">{cards}</div>
+    </div>
+    {REVIEW_JS}"""
+
+
 # ── Nav bar ───────────────────────────────────────────────────
 
 def nav_bar(user=None):
@@ -482,9 +552,9 @@ def base_page(title, body, user=None, extra_head=""):
 
 # ── Landing page ──────────────────────────────────────────────
 
-def landing_page(user=None):
+def landing_page(user=None, reviews=None):
     if user:
-        return dashboard_page(user)
+        return dashboard_page(user, reviews=reviews)
     body = f"""
     <div class="card" style="text-align:center;">
         <div style="margin:0 auto 20px;width:80px;height:80px;">{LOGO_SVG}</div>
@@ -505,43 +575,7 @@ def landing_page(user=None):
         </div>
     </div>
 
-    <!-- Reviews Section -->
-    <div class="card" style="margin-top:24px;">
-        <h2 style="text-align:center;">💬 User Reviews</h2>
-        <p style="text-align:center;color:var(--dim);font-size:.82rem;margin-bottom:24px;">⭐⭐⭐⭐⭐ Trusted by 2,400+ users</p>
-        <div class="reviews-grid">
-            <div class="review-card">
-                <div class="review-stars">⭐⭐⭐⭐⭐</div>
-                <p class="review-text">"Absolutely brilliant! Got high-res images in seconds. The Deep Scan feature is a game changer."</p>
-                <div class="review-user"><span class="review-avatar" style="background:linear-gradient(135deg,#00e5ff,#7c3aed);">R</span><span class="review-name">@rohan_creates</span></div>
-            </div>
-            <div class="review-card">
-                <div class="review-stars">⭐⭐⭐⭐⭐</div>
-                <p class="review-text">"Worth every rupee. UPI payment was instant and credits added immediately. Highly recommend!"</p>
-                <div class="review-user"><span class="review-avatar" style="background:linear-gradient(135deg,#ff2bd6,#ffd700);">A</span><span class="review-name">@ananya_arts</span></div>
-            </div>
-            <div class="review-card">
-                <div class="review-stars">⭐⭐⭐⭐⭐</div>
-                <p class="review-text">"The UI is so clean and premium. Scraping worked flawlessly. Best tool I've used for this!"</p>
-                <div class="review-user"><span class="review-avatar" style="background:linear-gradient(135deg,#00ff9c,#00e5ff);">K</span><span class="review-name">@karan_photo</span></div>
-            </div>
-            <div class="review-card">
-                <div class="review-stars">⭐⭐⭐⭐⭐</div>
-                <p class="review-text">"Monthly plan is super affordable. Extracted 50+ posts without any issues. 10/10 service."</p>
-                <div class="review-user"><span class="review-avatar" style="background:linear-gradient(135deg,#7c3aed,#ff2bd6);">P</span><span class="review-name">@priya.designs</span></div>
-            </div>
-            <div class="review-card">
-                <div class="review-stars">⭐⭐⭐⭐⭐</div>
-                <p class="review-text">"Fast, reliable, and the invoice system is so professional. Exactly what I needed for my agency."</p>
-                <div class="review-user"><span class="review-avatar" style="background:linear-gradient(135deg,#ffd700,#ff3860);">V</span><span class="review-name">@vivek_studio</span></div>
-            </div>
-            <div class="review-card">
-                <div class="review-stars">⭐⭐⭐⭐⭐</div>
-                <p class="review-text">"Gift card feature is amazing! Got free credits from a friend. The AI payment verification is next level."</p>
-                <div class="review-user"><span class="review-avatar" style="background:linear-gradient(135deg,#00e5ff,#00ff9c);">S</span><span class="review-name">@sneha_pixel</span></div>
-            </div>
-        </div>
-    </div>"""
+    {reviews_section(reviews or [])}"""
     return base_page("Cipher · Private Access", body, user)
 
 
@@ -666,7 +700,7 @@ def welcome_page(user):
 
 # ── Dashboard ─────────────────────────────────────────────────
 
-def dashboard_page(user, flash=None):
+def dashboard_page(user, flash=None, reviews=None):
     flash_html = ''
     if flash:
         cls = 'flash-ok' if flash.startswith('ok:') else 'flash-error'
@@ -736,7 +770,7 @@ def dashboard_page(user, flash=None):
         </form>
     </div>"""
 
-    body = flash_html + scrape_section + per_post + plans_section + gift_section
+    body = flash_html + scrape_section + per_post + plans_section + gift_section + reviews_section(reviews or [], user)
     return base_page("Cipher · Dashboard", body, user)
 
 

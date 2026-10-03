@@ -115,6 +115,14 @@ def init_db():
             verified_at TEXT,
             FOREIGN KEY (user_id) REFERENCES users(id)
         );
+        CREATE TABLE IF NOT EXISTS reviews (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            rating INTEGER NOT NULL DEFAULT 5,
+            text TEXT NOT NULL,
+            is_sample INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT (datetime('now'))
+        );
     ''')
 
     # Create admin user if not exists
@@ -124,6 +132,23 @@ def init_db():
             'INSERT INTO users (email, password_hash, name, is_admin, credits) VALUES (?, ?, ?, 1, 999999)',
             (ADMIN_EMAIL, hash_password(ADMIN_PASSWORD), 'Chirag (Admin)')
         )
+
+    # Seed sample reviews if table is empty
+    c.execute('SELECT COUNT(*) AS c FROM reviews')
+    if c.fetchone()['c'] == 0:
+        sample_reviews = [
+            ('rohan_creates', 5, 'Absolutely brilliant! Got high-res images in seconds. The Deep Scan feature is a game changer.'),
+            ('ananya_arts', 5, 'Worth every rupee. UPI payment was instant and credits added immediately. Highly recommend!'),
+            ('karan_photo', 5, 'The UI is so clean and premium. Scraping worked flawlessly. Best tool I\'ve used for this!'),
+            ('priya.designs', 5, 'Monthly plan is super affordable. Extracted 50+ posts without any issues. 10/10 service.'),
+            ('vivek_studio', 5, 'Fast, reliable, and the invoice system is so professional. Exactly what I needed for my agency.'),
+            ('sneha_pixel', 5, 'Gift card feature is amazing! Got free credits from a friend. The AI payment verification is next level.'),
+        ]
+        for name, rating, text in sample_reviews:
+            c.execute(
+                'INSERT INTO reviews (name, rating, text, is_sample) VALUES (?, ?, ?, 1)',
+                (name, rating, text)
+            )
 
     conn.commit()
     conn.close()
@@ -565,3 +590,24 @@ def get_analytics_summary():
         'downloads': total_downloads,
         'active_users': active_users,
     }
+
+
+# ── Reviews ───────────────────────────────────────────────────
+
+def add_review(name, rating, text):
+    conn = get_db()
+    conn.execute(
+        'INSERT INTO reviews (name, rating, text, is_sample) VALUES (?, ?, ?, 0)',
+        (name, rating, text)
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_reviews():
+    conn = get_db()
+    reviews = conn.execute(
+        'SELECT * FROM reviews ORDER BY is_sample DESC, created_at DESC'
+    ).fetchall()
+    conn.close()
+    return reviews
