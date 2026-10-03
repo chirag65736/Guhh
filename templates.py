@@ -326,6 +326,21 @@ tr:hover td { background: rgba(0,229,255,.04); }
     font-family: 'JetBrains Mono', monospace; font-size: .68rem; color: var(--dim);
     letter-spacing: 1px; margin-top: 4px;
 }
+/* reviews */
+.reviews-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:18px; }
+.review-card {
+    background:rgba(17,22,36,.8); border:1px solid var(--line); border-radius:14px;
+    padding:22px 18px; transition:all .3s;
+}
+.review-card:hover { border-color:var(--cyan); transform:translateY(-3px); box-shadow:0 10px 40px rgba(0,229,255,.12); }
+.review-stars { font-size:.8rem; letter-spacing:2px; margin-bottom:12px; }
+.review-text { color:var(--text); font-size:.82rem; line-height:1.6; margin-bottom:16px; }
+.review-user { display:flex; align-items:center; gap:10px; }
+.review-avatar {
+    width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    font-family:'JetBrains Mono',monospace; font-size:.85rem; font-weight:800; color:#05060a;
+}
+.review-name { font-family:'JetBrains Mono',monospace; font-size:.78rem; color:var(--cyan); letter-spacing:1px; }
 /* mobile nav toggle */
 .nav-toggle {
     display: none; background: none; border: none; cursor: pointer;
@@ -383,6 +398,8 @@ tr:hover td { background: rgba(0,229,255,.04); }
     table { font-size: .72rem; }
     th, td { padding: 8px 6px; }
     .made-by { padding: 16px 12px; font-size: .68rem; }
+    .reviews-grid { grid-template-columns: 1fr; gap: 14px; }
+    .review-card { padding: 18px 14px; }
     .pay-card-3d { width: 280px; height: 180px; }
     .verify-scanner { width: 200px; height: 200px; }
     .scan-steps { max-width: 100%; }
@@ -476,6 +493,44 @@ def landing_page(user=None):
                 <span style="font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--green);letter-spacing:1px;">✔ Monthly Plans</span>
                 <span style="font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--green);letter-spacing:1px;">✔ Gift Cards</span>
                 <span style="font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--green);letter-spacing:1px;">✔ Invoices</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reviews Section -->
+    <div class="card" style="margin-top:24px;">
+        <h2 style="text-align:center;">💬 User Reviews</h2>
+        <p style="text-align:center;color:var(--dim);font-size:.82rem;margin-bottom:24px;">⭐⭐⭐⭐⭐ Trusted by 2,400+ users</p>
+        <div class="reviews-grid">
+            <div class="review-card">
+                <div class="review-stars">⭐⭐⭐⭐⭐</div>
+                <p class="review-text">"Absolutely brilliant! Got high-res images in seconds. The Deep Scan feature is a game changer."</p>
+                <div class="review-user"><span class="review-avatar" style="background:linear-gradient(135deg,#00e5ff,#7c3aed);">R</span><span class="review-name">@rohan_creates</span></div>
+            </div>
+            <div class="review-card">
+                <div class="review-stars">⭐⭐⭐⭐⭐</div>
+                <p class="review-text">"Worth every rupee. UPI payment was instant and credits added immediately. Highly recommend!"</p>
+                <div class="review-user"><span class="review-avatar" style="background:linear-gradient(135deg,#ff2bd6,#ffd700);">A</span><span class="review-name">@ananya_arts</span></div>
+            </div>
+            <div class="review-card">
+                <div class="review-stars">⭐⭐⭐⭐⭐</div>
+                <p class="review-text">"The UI is so clean and premium. Scraping worked flawlessly. Best tool I've used for this!"</p>
+                <div class="review-user"><span class="review-avatar" style="background:linear-gradient(135deg,#00ff9c,#00e5ff);">K</span><span class="review-name">@karan_photo</span></div>
+            </div>
+            <div class="review-card">
+                <div class="review-stars">⭐⭐⭐⭐⭐</div>
+                <p class="review-text">"Monthly plan is super affordable. Extracted 50+ posts without any issues. 10/10 service."</p>
+                <div class="review-user"><span class="review-avatar" style="background:linear-gradient(135deg,#7c3aed,#ff2bd6);">P</span><span class="review-name">@priya.designs</span></div>
+            </div>
+            <div class="review-card">
+                <div class="review-stars">⭐⭐⭐⭐⭐</div>
+                <p class="review-text">"Fast, reliable, and the invoice system is so professional. Exactly what I needed for my agency."</p>
+                <div class="review-user"><span class="review-avatar" style="background:linear-gradient(135deg,#ffd700,#ff3860);">V</span><span class="review-name">@vivek_studio</span></div>
+            </div>
+            <div class="review-card">
+                <div class="review-stars">⭐⭐⭐⭐⭐</div>
+                <p class="review-text">"Gift card feature is amazing! Got free credits from a friend. The AI payment verification is next level."</p>
+                <div class="review-user"><span class="review-avatar" style="background:linear-gradient(135deg,#00e5ff,#00ff9c);">S</span><span class="review-name">@sneha_pixel</span></div>
             </div>
         </div>
     </div>"""
