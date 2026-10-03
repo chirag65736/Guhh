@@ -16,7 +16,7 @@ import ai_verifier
 from templates import (
     landing_page, login_page, signup_page, dashboard_page,
     payment_page, invoice_page, admin_page, analytics_page,
-    scrape_loading_page,
+    scrape_loading_page, terms_page, welcome_page,
 )
 from igscrapper import (
     fetch_instagram_profile,
@@ -106,6 +106,17 @@ class CipherHandler(http.server.BaseHTTPRequestHandler):
                 self._redirect('/dashboard')
                 return
             self._serve_html(signup_page())
+            return
+
+        if path == '/welcome':
+            if not user:
+                self._redirect('/login')
+                return
+            self._serve_html(welcome_page(user))
+            return
+
+        if path == '/terms':
+            self._serve_html(terms_page(user))
             return
 
         if path == '/logout':
@@ -290,7 +301,7 @@ class CipherHandler(http.server.BaseHTTPRequestHandler):
             if db.create_user(email, password, name):
                 u = db.get_user_by_email(email)
                 token = db.create_session(u['id'])
-                self._redirect('/dashboard', cookie=f'session={token}; Path=/; HttpOnly')
+                self._redirect('/welcome', cookie=f'session={token}; Path=/; HttpOnly')
             else:
                 self._serve_html(signup_page('Email already registered.'))
             return

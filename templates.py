@@ -22,7 +22,7 @@ html, body { height: 100%; }
 body {
     font-family: 'Inter', sans-serif;
     background: var(--bg-0); color: var(--text); min-height: 100vh;
-    padding: 0;
+    padding: 0; font-weight: bold; font-style: italic;
     background-image:
         radial-gradient(circle at 15% 10%, rgba(0,229,255,.10), transparent 45%),
         radial-gradient(circle at 85% 90%, rgba(255,43,214,.10), transparent 45%);
@@ -450,7 +450,7 @@ def base_page(title, body, user=None, extra_head=""):
     <div class="bg-orbs"><div class="orb"></div><div class="orb"></div><div class="orb"></div></div>
     {nav_bar(user)}
     <div class="page">{body}</div>
-    <div class="made-by">Made with ❤ by <span class="mb-name">Chirag</span></div>
+    <div class="made-by">Made with ❤ by <span class="mb-name">ii_silkroad_ii</span> · <a href="/terms" style="color:var(--dim);text-decoration:none;font-style:normal;font-weight:normal;">Terms &amp; Conditions</a></div>
 </body>
 </html>"""
 
@@ -521,6 +521,84 @@ def signup_page(error=None):
         </p>
     </div>"""
     return base_page("Cipher · Sign Up", body)
+
+
+# ── Terms & Conditions ────────────────────────────────────────
+
+def terms_page(user=None):
+    body = """
+    <div class="card" style="max-width:720px;margin:0 auto;">
+        <h2>📜 Terms &amp; Conditions</h2>
+        <div style="color:var(--text);font-size:.88rem;line-height:1.8;">
+            <p style="margin-bottom:16px;"><b><i>Welcome to CIPHER.</i></b> By using this website you agree to the following terms and conditions. Please read them carefully.</p>
+
+            <p style="margin-bottom:12px;"><b><i>1. Service Description.</i></b> CIPHER is a private access engine that allows users to extract and view high-resolution Instagram post images. Credits are required for each scan.</p>
+
+            <p style="margin-bottom:12px;"><b><i>2. Credits &amp; Payments.</i></b> Quick Scan costs 1 credit per execution. Private Deep Scan costs 2 credits per execution. Credits can be purchased individually or via monthly plans. All payments are non-refundable once credits are added to your account.</p>
+
+            <p style="margin-bottom:12px;"><b><i>3. Acceptable Use.</i></b> You agree to use this service for lawful purposes only. You must not misuse the service to harass, stalk, or harm any individual. You are solely responsible for how you use the extracted content.</p>
+
+            <p style="margin-bottom:12px;"><b><i>4. No Guarantee of Results.</i></b> Instagram actively blocks automated access. Some profiles may not be accessible due to privacy settings, rate limiting, or IP restrictions. CIPHER does not guarantee successful extraction for every profile.</p>
+
+            <p style="margin-bottom:12px;"><b><i>5. Privacy.</i></b> Your email and payment information are stored securely. Payment screenshots are kept private and accessible only to administrators for verification purposes.</p>
+
+            <p style="margin-bottom:12px;"><b><i>6. Account Security.</i></b> You are responsible for keeping your account credentials safe. Do not share your login with others. CIPHER is not liable for unauthorized access to your account.</p>
+
+            <p style="margin-bottom:12px;"><b><i>7. UPI Payments.</i></b> UPI payments are verified using AI-assisted analysis and/or manual admin review. Submitting false or fraudulent payment proof will result in account suspension.</p>
+
+            <p style="margin-bottom:12px;"><b><i>8. Modification of Terms.</i></b> CIPHER reserves the right to update these terms at any time. Continued use of the service after changes constitutes acceptance of the updated terms.</p>
+
+            <p style="margin-bottom:12px;"><b><i>9. Limitation of Liability.</i></b> CIPHER and its operators are not liable for any damages arising from the use or inability to use this service. The service is provided "as is" without warranties of any kind.</p>
+
+            <p style="margin-bottom:12px;"><b><i>10. Contact.</i></b> For any questions regarding these terms, reach out via Instagram: <a href="https://instagram.com/ii_silkroad_ii" target="_blank" style="color:var(--cyan);">@ii_silkroad_ii</a></p>
+
+            <p style="margin-top:20px;color:var(--dim);font-size:.78rem;">Last updated: October 2026</p>
+        </div>
+        <div style="margin-top:24px;text-align:center;">
+            <a href="/dashboard" class="btn btn-primary">Back to Dashboard</a>
+        </div>
+    </div>"""
+    return base_page("Cipher · Terms & Conditions", body, user)
+
+
+# ── Welcome intro (shown after signup) ─────────────────────────
+
+def welcome_page(user):
+    body = f"""
+    <div class="card" style="max-width:560px;margin:0 auto;text-align:center;">
+        <div style="margin:0 auto 20px;width:80px;height:80px;">{LOGO_SVG}</div>
+        <h1 style="font-family:'JetBrains Mono',monospace;font-size:2rem;font-weight:800;letter-spacing:4px;background:linear-gradient(90deg,var(--cyan),var(--magenta));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:12px;">Welcome, {user['name']}!</h1>
+        <p style="color:var(--cyan);font-size:.85rem;letter-spacing:3px;text-transform:uppercase;margin-bottom:24px;">Your account is ready ✦</p>
+
+        <div style="text-align:left;background:rgba(17,22,36,.8);border:1px solid var(--line);border-radius:14px;padding:24px 20px;margin-bottom:24px;">
+            <p style="color:var(--text);font-size:.88rem;line-height:1.8;margin-bottom:14px;"><b><i>CIPHER</i></b> is a private access engine for extracting high-resolution Instagram post images. Here's how to get started:</p>
+            <div style="display:flex;flex-direction:column;gap:14px;">
+                <div style="display:flex;align-items:flex-start;gap:12px;">
+                    <span style="font-size:1.4rem;">⚡</span>
+                    <div><b style="color:var(--cyan);">Quick Scan</b> — 1 credit per scan. Enter any Instagram username to extract their posts.</div>
+                </div>
+                <div style="display:flex;align-items:flex-start;gap:12px;">
+                    <span style="font-size:1.4rem;">🔍</span>
+                    <div><b style="color:var(--magenta);">Deep Scan</b> — 2 credits per scan. Finds more posts using pagination (up to 60).</div>
+                </div>
+                <div style="display:flex;align-items:flex-start;gap:12px;">
+                    <span style="font-size:1.4rem;">💳</span>
+                    <div><b style="color:var(--green);">Buy Credits</b> — Pay per post (₹15) or choose a monthly plan. UPI &amp; card accepted.</div>
+                </div>
+                <div style="display:flex;align-items:flex-start;gap:12px;">
+                    <span style="font-size:1.4rem;">🎁</span>
+                    <div><b style="color:var(--gold);">Gift Cards</b> — Redeem codes for free credits.</div>
+                </div>
+            </div>
+        </div>
+
+        <div style="background:rgba(0,229,255,.06);border:1px solid rgba(0,229,255,.2);border-radius:12px;padding:16px;margin-bottom:24px;">
+            <p style="color:var(--dim);font-size:.78rem;">By continuing, you agree to our <a href="/terms" style="color:var(--cyan);">Terms &amp; Conditions</a>.</p>
+        </div>
+
+        <a href="/dashboard" class="btn btn-primary btn-block" style="font-size:.95rem;">🚀 Enter Dashboard</a>
+    </div>"""
+    return base_page("Cipher · Welcome", body, user)
 
 
 # ── Dashboard ─────────────────────────────────────────────────
@@ -1058,7 +1136,7 @@ def invoice_page(user, invoice):
         </div>
         <div class="invoice-sign">
             <div class="sign-label">Authorized Signature</div>
-            <div class="sign-name">chirag</div>
+            <div class="sign-name">ii_silkroad_ii</div>
             <div class="sign-title">CIPHER · ADMIN</div>
         </div>
         <div style="text-align:center;margin-top:28px;">
