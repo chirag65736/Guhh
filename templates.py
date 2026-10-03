@@ -429,6 +429,14 @@ LOGO_SVG = """
 </svg>
 """
 
+# ── Custom Credit Icons (unique to CIPHER) ─────────────────────
+
+CREDIT_ICON = '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle;"><defs><linearGradient id="cgrd1" x1="0" y1="0" x2="24" y2="24"><stop offset="0" stop-color="#00e5ff"/><stop offset="1" stop-color="#ff2bd6"/></linearGradient></defs><circle cx="12" cy="12" r="11" fill="rgba(0,229,255,.08)" stroke="url(#cgrd1)" stroke-width="1.5"/><path d="M12 5 L17 8.5 V15.5 L12 19 L7 15.5 V8.5 Z" fill="none" stroke="url(#cgrd1)" stroke-width="1.2"/><path d="M14.5 9 A3.5 3.5 0 1 0 14.5 15" stroke="url(#cgrd1)" stroke-width="1.8" stroke-linecap="round" fill="none"/><circle cx="12" cy="12" r="1.5" fill="url(#cgrd1)"/></svg>'
+
+SCAN_ICON = '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle;"><defs><linearGradient id="sgrd1" x1="0" y1="0" x2="24" y2="24"><stop offset="0" stop-color="#00e5ff"/><stop offset="1" stop-color="#00ff9c"/></linearGradient></defs><circle cx="12" cy="12" r="11" fill="rgba(0,255,156,.06)" stroke="url(#sgrd1)" stroke-width="1.5"/><path d="M12 5 L17 8.5 V15.5 L12 19 L7 15.5 V8.5 Z" fill="none" stroke="url(#sgrd1)" stroke-width="1.2"/><circle cx="12" cy="12" r="4.5" fill="none" stroke="url(#sgrd1)" stroke-width="1.2" stroke-dasharray="2 2"/><path d="M12 7.5 V12 L15 14" stroke="url(#sgrd1)" stroke-width="1.6" stroke-linecap="round" fill="none"/></svg>'
+
+DEEP_ICON = '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle;"><defs><linearGradient id="dgrd1" x1="0" y1="0" x2="24" y2="24"><stop offset="0" stop-color="#ff2bd6"/><stop offset="1" stop-color="#7c3aed"/></linearGradient></defs><circle cx="12" cy="12" r="11" fill="rgba(255,43,214,.06)" stroke="url(#dgrd1)" stroke-width="1.5"/><path d="M12 5 L17 8.5 V15.5 L12 19 L7 15.5 V8.5 Z" fill="none" stroke="url(#dgrd1)" stroke-width="1.2"/><circle cx="10" cy="10" r="3.5" fill="none" stroke="url(#dgrd1)" stroke-width="1.6"/><path d="M12.5 12.5 L16 16" stroke="url(#dgrd1)" stroke-width="1.8" stroke-linecap="round"/></svg>'
+
 # ── Nav bar ───────────────────────────────────────────────────
 
 def nav_bar(user=None):
@@ -437,7 +445,7 @@ def nav_bar(user=None):
         if user['is_admin']:
             links += '<a href="/admin">Admin Panel</a>'
             links += '<a href="/analytics">Analytics</a>'
-        links += f'<span class="nav-credits">💠 {user["credits"]} Credits</span>'
+        links += f'<span class="nav-credits">{CREDIT_ICON} {user["credits"]} Credits</span>'
         links += '<a href="/logout" class="nav-logout">Logout</a>'
     else:
         links = '<a href="/login">Login</a><a href="/signup">Sign Up</a>'
@@ -629,7 +637,7 @@ def welcome_page(user):
             <p style="color:var(--text);font-size:.88rem;line-height:1.8;margin-bottom:14px;"><b><i>CIPHER</i></b> is a private access engine for extracting high-resolution Instagram post images. Here's how to get started:</p>
             <div style="display:flex;flex-direction:column;gap:14px;">
                 <div style="display:flex;align-items:flex-start;gap:12px;">
-                    <span style="font-size:1.4rem;">💠</span>
+                    <span style="font-size:1.4rem;">{SCAN_ICON}</span>
                     <div><b style="color:var(--cyan);">Quick Scan</b> — 1 credit per scan. Enter any Instagram username to extract their posts.</div>
                 </div>
                 <div style="display:flex;align-items:flex-start;gap:12px;">
@@ -667,17 +675,17 @@ def dashboard_page(user, flash=None):
     # Scrape form
     scrape_section = f"""
     <div class="card">
-        <h2>💠 Extract Posts</h2>
+        <h2>{CREDIT_ICON} Extract Posts</h2>
         <p style="color:var(--dim);font-size:.85rem;margin-bottom:18px;">Enter an Instagram username. <b style="color:var(--green);">1 credit</b> per scrape. You have <b style="color:var(--green);">{user['credits']}</b> credits.</p>
         <form action="/scrape" method="get" style="display:flex;gap:12px;flex-wrap:wrap;">
             <input type="text" name="username" placeholder="Instagram username..." required style="flex:1;min-width:200px;" autocomplete="off">
-            <button type="submit" class="btn btn-primary">💠 Quick Scan</button>
+            <button type="submit" class="btn btn-primary">{SCAN_ICON} Quick Scan</button>
         </form>
         <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--line);">
             <p style="color:var(--dim);font-size:.78rem;margin-bottom:12px;">🛰 <b style="color:var(--magenta);">Private Deep Scan</b> — finds <b>more posts</b> using pagination (up to 60). <b style="color:var(--magenta);">2 credits</b> per scan. Separate scraper engine.</p>
             <form action="/scrape-private" method="get" style="display:flex;gap:12px;flex-wrap:wrap;">
                 <input type="text" name="username" placeholder="Instagram username..." required style="flex:1;min-width:200px;" autocomplete="off">
-                <button type="submit" class="btn btn-outline" style="border-color:var(--magenta);color:var(--magenta);">🛰 Deep Scan</button>
+                <button type="submit" class="btn btn-outline" style="border-color:var(--magenta);color:var(--magenta);">{DEEP_ICON} Deep Scan</button>
             </form>
         </div>
     </div>"""
@@ -745,7 +753,7 @@ def scrape_loading_page(user, username, mode='quick'):
 
     body = f"""
     <div class="card" style="text-align:center;max-width:520px;margin:0 auto;">
-        <h2 style="color:{mode_color};">💠 {mode_label}</h2>
+        <h2 style="color:{mode_color};">{SCAN_ICON if mode == 'quick' else DEEP_ICON} {mode_label}</h2>
         <p style="color:var(--dim);font-size:.85rem;margin-bottom:24px;">Target: <b style="color:{mode_color};">@{username}</b></p>
 
         <!-- Radar scanner animation -->
@@ -1294,7 +1302,7 @@ def admin_page(user, stats, users, payments, gift_cards, invoices, payment_metho
 
     add_credits = f"""
     <div class="card">
-        <h2>💠 Add Credits to User</h2>
+        <h2>{CREDIT_ICON} Add Credits to User</h2>
         <form action="/admin/add-credits" method="post" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
             <div class="field" style="flex:2;min-width:200px;margin-bottom:0;">
                 <label>Select User</label>
