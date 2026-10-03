@@ -660,42 +660,161 @@ def terms_page(user=None):
 
 # ── Welcome intro (shown after signup) ─────────────────────────
 
-def welcome_page(user):
-    body = f"""
-    <div class="card" style="max-width:560px;margin:0 auto;text-align:center;">
-        <div style="margin:0 auto 20px;width:80px;height:80px;">{LOGO_SVG}</div>
-        <h1 style="font-family:'JetBrains Mono',monospace;font-size:2rem;font-weight:800;letter-spacing:4px;background:linear-gradient(90deg,var(--cyan),var(--magenta));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:12px;">Welcome, {user['name']}!</h1>
-        <p style="color:var(--cyan);font-size:.85rem;letter-spacing:3px;text-transform:uppercase;margin-bottom:24px;">Your account is ready ✪</p>
+INTRO_CSS = """
+.intro-wrap { max-width:480px; margin:0 auto; position:relative; overflow:hidden; }
+.intro-track { display:flex; transition:transform .5s cubic-bezier(.4,0,.2,1); }
+.intro-slide {
+    min-width:100%; padding:8px 4px; text-align:center;
+    opacity:0; transition:opacity .4s ease;
+}
+.intro-slide.active { opacity:1; }
+.intro-icon-wrap {
+    width:100px; height:100px; margin:0 auto 24px;
+    display:flex; align-items:center; justify-content:center;
+    border-radius:50%; border:1px solid var(--line);
+    background:rgba(17,22,36,.8); position:relative;
+}
+.intro-icon-wrap::after {
+    content:''; position:absolute; inset:-4px; border-radius:50%;
+    border:1px solid rgba(0,229,255,.15); animation:introPulse 2s ease infinite;
+}
+@keyframes introPulse { 0%,100%{transform:scale(1);opacity:.6;} 50%{transform:scale(1.1);opacity:0;} }
+.intro-icon-wrap svg { width:48px; height:48px; }
+.intro-icon-emoji { font-size:2.8rem; }
+.intro-step-num {
+    font-family:'JetBrains Mono',monospace; font-size:.68rem; color:var(--dim);
+    letter-spacing:4px; text-transform:uppercase; margin-bottom:10px;
+}
+.intro-title {
+    font-family:'JetBrains Mono',monospace; font-size:1.4rem; font-weight:800;
+    letter-spacing:2px; margin-bottom:14px;
+}
+.intro-desc {
+    color:var(--dim); font-size:.88rem; line-height:1.7; max-width:340px; margin:0 auto 20px;
+}
+.intro-desc b { color:var(--text); }
+.intro-dots { display:flex; gap:8px; justify-content:center; margin:24px 0; }
+.intro-dot {
+    width:8px; height:8px; border-radius:50%; background:rgba(0,229,255,.2);
+    cursor:pointer; transition:all .3s;
+}
+.intro-dot.active { width:28px; border-radius:4px; background:var(--cyan); box-shadow:0 0 10px rgba(0,229,255,.4); }
+.intro-nav { display:flex; gap:12px; justify-content:center; align-items:center; }
+.intro-link {
+    font-family:'JetBrains Mono',monospace; font-size:.78rem; color:var(--dim);
+    text-decoration:none; letter-spacing:1px; cursor:pointer; transition:color .3s;
+}
+.intro-link:hover { color:var(--cyan); }
+"""
 
-        <div style="text-align:left;background:rgba(17,22,36,.8);border:1px solid var(--line);border-radius:14px;padding:24px 20px;margin-bottom:24px;">
-            <p style="color:var(--text);font-size:.88rem;line-height:1.8;margin-bottom:14px;"><b><i>CIPHER</i></b> is a private access engine for extracting high-resolution Instagram post images. Here's how to get started:</p>
-            <div style="display:flex;flex-direction:column;gap:14px;">
-                <div style="display:flex;align-items:flex-start;gap:12px;">
-                    <span style="font-size:1.4rem;">{SCAN_ICON}</span>
-                    <div><b style="color:var(--cyan);">Quick Scan</b> — 1 credit per scan. Enter any Instagram username to extract their posts.</div>
+INTRO_JS = """
+<script>
+(function() {
+    var slides = document.querySelectorAll('.intro-slide');
+    var dots = document.querySelectorAll('.intro-dot');
+    var track = document.getElementById('introTrack');
+    var btnNext = document.getElementById('introNext');
+    var btnPrev = document.getElementById('introPrev');
+    var btnSkip = document.getElementById('introSkip');
+    var btnFinish = document.getElementById('introFinish');
+    var current = 0;
+    var total = slides.length;
+
+    function go(idx) {
+        current = Math.max(0, Math.min(idx, total - 1));
+        track.style.transform = 'translateX(-' + (current * 100) + '%)';
+        slides.forEach(function(s, i) { s.classList.toggle('active', i === current); });
+        dots.forEach(function(d, i) { d.classList.toggle('active', i === current); });
+        btnPrev.style.visibility = current === 0 ? 'hidden' : 'visible';
+        if (current === total - 1) {
+            btnNext.style.display = 'none';
+            btnFinish.style.display = 'inline-block';
+        } else {
+            btnNext.style.display = 'inline-block';
+            btnFinish.style.display = 'none';
+        }
+    }
+
+    btnNext.addEventListener('click', function() { go(current + 1); });
+    btnPrev.addEventListener('click', function() { go(current - 1); });
+    dots.forEach(function(d, i) { d.addEventListener('click', function() { go(i); }); });
+    btnSkip.addEventListener('click', function() { window.location.href = '/dashboard'; });
+    btnFinish.addEventListener('click', function() { window.location.href = '/dashboard'; });
+
+    go(0);
+})();
+</script>"""
+
+
+def welcome_page(user):
+    name = user['name']
+    body = f"""
+    <div class="card" style="max-width:520px;margin:0 auto;">
+        <div class="intro-wrap">
+            <div class="intro-track" id="introTrack">
+
+                <!-- Slide 1: Welcome -->
+                <div class="intro-slide active">
+                    <div class="intro-icon-wrap">{LOGO_SVG}</div>
+                    <div class="intro-step-num">Step 1 of 5</div>
+                    <div class="intro-title" style="background:linear-gradient(90deg,var(--cyan),var(--magenta));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;">Welcome, {name}!</div>
+                    <p class="intro-desc">Your <b>CIPHER</b> account is ready. This quick tour will show you how everything works in under a minute.</p>
                 </div>
-                <div style="display:flex;align-items:flex-start;gap:12px;">
-                    <span style="font-size:1.4rem;">🛰</span>
-                    <div><b style="color:var(--magenta);">Deep Scan</b> — 2 credits per scan. Finds more posts using pagination (up to 60).</div>
+
+                <!-- Slide 2: Quick Scan -->
+                <div class="intro-slide">
+                    <div class="intro-icon-wrap"><span class="intro-icon-emoji" style="font-size:1.6rem;display:flex;align-items:center;justify-content:center;">{SCAN_ICON}</span></div>
+                    <div class="intro-step-num">Step 2 of 5</div>
+                    <div class="intro-title" style="color:var(--cyan);">Quick Scan</div>
+                    <p class="intro-desc">Enter any <b>Instagram username</b> on your dashboard and hit Quick Scan. CIPHER extracts their posts in seconds. Costs <b style="color:var(--green);">1 credit</b> per scan.</p>
                 </div>
-                <div style="display:flex;align-items:flex-start;gap:12px;">
-                    <span style="font-size:1.4rem;">💰</span>
-                    <div><b style="color:var(--green);">Buy Credits</b> — Pay per post (₹15) or choose a monthly plan. UPI &amp; card accepted.</div>
+
+                <!-- Slide 3: Deep Scan -->
+                <div class="intro-slide">
+                    <div class="intro-icon-wrap"><span class="intro-icon-emoji" style="font-size:1.6rem;display:flex;align-items:center;justify-content:center;">{DEEP_ICON}</span></div>
+                    <div class="intro-step-num">Step 3 of 5</div>
+                    <div class="intro-title" style="color:var(--magenta);">Private Deep Scan</div>
+                    <p class="intro-desc">Need <b>more posts</b>? Deep Scan uses a separate engine with pagination to find up to <b>60 posts</b>. Costs <b style="color:var(--magenta);">2 credits</b> per scan.</p>
                 </div>
-                <div style="display:flex;align-items:flex-start;gap:12px;">
-                    <span style="font-size:1.4rem;">🎟</span>
-                    <div><b style="color:var(--gold);">Gift Cards</b> — Redeem codes for free credits.</div>
+
+                <!-- Slide 4: Buy Credits -->
+                <div class="intro-slide">
+                    <div class="intro-icon-wrap"><span class="intro-icon-emoji" style="font-size:1.6rem;display:flex;align-items:center;justify-content:center;">{CREDIT_ICON}</span></div>
+                    <div class="intro-step-num">Step 4 of 5</div>
+                    <div class="intro-title" style="color:var(--green);">Buy Credits</div>
+                    <p class="intro-desc">Pay <b style="color:var(--green);">\u20B915 per post</b> or pick a <b>monthly plan</b> (Basic \u20B9199, Pro \u20B9499, Elite \u20B9999). <b>UPI &amp; card</b> both accepted. Invoices auto-generated.</p>
                 </div>
+
+                <!-- Slide 5: Ready -->
+                <div class="intro-slide">
+                    <div class="intro-icon-wrap"><span class="intro-icon-emoji">\U0001F6F8</span></div>
+                    <div class="intro-step-num">Step 5 of 5</div>
+                    <div class="intro-title" style="background:linear-gradient(90deg,var(--cyan),var(--magenta));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;">You're All Set!</div>
+                    <p class="intro-desc">You can also <b style="color:var(--gold);">redeem gift cards</b> for free credits. By continuing, you agree to our <a href="/terms" style="color:var(--cyan);">Terms &amp; Conditions</a>.</p>
+                </div>
+
+            </div>
+
+            <!-- Progress dots -->
+            <div class="intro-dots">
+                <span class="intro-dot active"></span>
+                <span class="intro-dot"></span>
+                <span class="intro-dot"></span>
+                <span class="intro-dot"></span>
+                <span class="intro-dot"></span>
+            </div>
+
+            <!-- Navigation -->
+            <div class="intro-nav">
+                <span class="intro-link" id="introPrev" style="visibility:hidden;">\u2190 Previous</span>
+                <a href="/dashboard" class="btn btn-primary" id="introFinish" style="display:none;font-size:.85rem;padding:12px 24px;">\U0001F6F8 Enter Dashboard</a>
+                <button class="btn btn-outline" id="introNext" style="font-size:.85rem;padding:12px 24px;">Next \u2192</button>
+                <span class="intro-link" id="introSkip">Skip</span>
             </div>
         </div>
-
-        <div style="background:rgba(0,229,255,.06);border:1px solid rgba(0,229,255,.2);border-radius:12px;padding:16px;margin-bottom:24px;">
-            <p style="color:var(--dim);font-size:.78rem;">By continuing, you agree to our <a href="/terms" style="color:var(--cyan);">Terms &amp; Conditions</a>.</p>
-        </div>
-
-        <a href="/dashboard" class="btn btn-primary btn-block" style="font-size:.95rem;">🛸 Enter Dashboard</a>
-    </div>"""
-    return base_page("Cipher · Welcome", body, user)
+    </div>
+    {INTRO_JS}"""
+    return base_page("Cipher · Welcome", body, user, extra_head=f"<style>{INTRO_CSS}</style>")
 
 
 # ── Dashboard ─────────────────────────────────────────────────
