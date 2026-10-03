@@ -480,8 +480,15 @@ def dashboard_page(user, flash=None):
         <p style="color:var(--dim);font-size:.85rem;margin-bottom:18px;">Enter an Instagram username. <b style="color:var(--green);">1 credit</b> per scrape. You have <b style="color:var(--green);">{user['credits']}</b> credits.</p>
         <form action="/scrape" method="get" style="display:flex;gap:12px;flex-wrap:wrap;">
             <input type="text" name="username" placeholder="Instagram username..." required style="flex:1;min-width:200px;" autocomplete="off">
-            <button type="submit" class="btn btn-primary">Extract</button>
+            <button type="submit" class="btn btn-primary">⚡ Quick Scan</button>
         </form>
+        <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--line);">
+            <p style="color:var(--dim);font-size:.78rem;margin-bottom:12px;">🔍 <b style="color:var(--magenta);">Private Deep Scan</b> — finds <b>more posts</b> using pagination (up to 60). Separate scraper engine.</p>
+            <form action="/scrape-private" method="get" style="display:flex;gap:12px;flex-wrap:wrap;">
+                <input type="text" name="username" placeholder="Instagram username..." required style="flex:1;min-width:200px;" autocomplete="off">
+                <button type="submit" class="btn btn-outline" style="border-color:var(--magenta);color:var(--magenta);">🔍 Deep Scan</button>
+            </form>
+        </div>
     </div>"""
 
     # Per-post payment
@@ -532,6 +539,187 @@ def dashboard_page(user, flash=None):
 
     body = flash_html + scrape_section + per_post + plans_section + gift_section
     return base_page("Cipher · Dashboard", body, user)
+
+
+# ── Scrape loading page (animated) ─────────────────────────────
+
+def scrape_loading_page(user, username, mode='quick'):
+    """Animated loading page shown while the scraper works.
+    JS fetches the actual result from /scrape-result or /scrape-private-result
+    and swaps the page content when done."""
+    api_url = f"/scrape-result?username={urllib.parse.quote(username)}" if mode == 'quick' \
+        else f"/scrape-private-result?username={urllib.parse.quote(username)}"
+    mode_label = 'Quick Scan' if mode == 'quick' else 'Private Deep Scan'
+    mode_color = 'var(--cyan)' if mode == 'quick' else 'var(--magenta)'
+
+    body = f"""
+    <div class="card" style="text-align:center;max-width:520px;margin:0 auto;">
+        <h2 style="color:{mode_color};">⚡ {mode_label}</h2>
+        <p style="color:var(--dim);font-size:.85rem;margin-bottom:24px;">Target: <b style="color:{mode_color};">@{username}</b></p>
+
+        <!-- Radar scanner animation -->
+        <div class="radar-wrap">
+            <div class="radar">
+                <div class="radar-ring"></div>
+                <div class="radar-ring r2"></div>
+                <div class="radar-ring r3"></div>
+                <div class="radar-sweep"></div>
+                <div class="radar-center"></div>
+                <div class="radar-dot d1"></div>
+                <div class="radar-dot d2"></div>
+                <div class="radar-dot d3"></div>
+            </div>
+        </div>
+
+        <!-- Progress steps -->
+        <div class="scan-steps" style="margin:28px 0;">
+            <div class="scan-step" id="step1">
+                <span class="step-icon">○</span> Connecting to Instagram...
+            </div>
+            <div class="scan-step" id="step2">
+                <span class="step-icon">○</span> Fetching profile data...
+            </div>
+            <div class="scan-step" id="step3">
+                <span class="step-icon">○</span> Finding posts{'...' if mode == 'quick' else ' (paginating)...'}
+            </div>
+            <div class="scan-step" id="step4">
+                <span class="step-icon">○</span> Building gallery...
+            </div>
+        </div>
+
+        <!-- Post counter -->
+        <div class="post-counter" id="postCounter" style="display:none;">
+            <span class="counter-num" id="counterNum">0</span>
+            <span class="counter-lbl">posts found</span>
+        </div>
+
+        <p style="color:var(--dim);font-size:.78rem;margin-top:20px;" id="loadingMsg">Scanning... please wait</p>
+        <p style="color:var(--red);font-size:.78rem;margin-top:12px;display:none;" id="errorMsg"></p>
+        <a href="/dashboard" class="btn btn-outline btn-sm" style="margin-top:16px;display:none;" id="backBtn">← Back to Dashboard</a>
+    </div>"""
+
+    extra = f"""<style>
+.radar-wrap {{ display:flex;justify-content:center;margin:10px 0; }}
+.radar {{
+    width:200px;height:200px;position:relative;border-radius:50%;
+    background:radial-gradient(circle,rgba(0,229,255,.03),rgba(5,6,10,.8));
+    border:1px solid rgba(0,229,255,.2);overflow:hidden;
+}}
+.radar-ring {{
+    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    width:60%;height:60%;border-radius:50%;border:1px solid rgba(0,229,255,.1);
+}}
+.radar-ring.r2 {{ width:80%;height:80%; }}
+.radar-ring.r3 {{ width:100%;height:100%; }}
+.radar-sweep {{
+    position:absolute;top:50%;left:50%;width:50%;height:2px;
+    transform-origin:left center;
+    background:linear-gradient(90deg,transparent,{mode_color});
+    box-shadow:0 0 12px {mode_color};
+    animation:radarSweep 2s linear infinite;
+}}
+@keyframes radarSweep {{ from {{ transform:rotate(0deg); }} to {{ transform:rotate(360deg); }} }}
+.radar-center {{
+    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    width:10px;height:10px;border-radius:50%;background:{mode_color};
+    box-shadow:0 0 15px {mode_color};animation:radarPulse 1.5s ease infinite;
+}}
+@keyframes radarPulse {{ 0%,100%{{opacity:1;}}50%{{opacity:.4;}} }}
+.radar-dot {{
+    position:absolute;width:6px;height:6px;border-radius:50%;
+    background:var(--green);box-shadow:0 0 8px var(--green);
+    animation:dotBlink 1.5s ease infinite;
+}}
+.radar-dot.d1 {{ top:30%;left:60%;animation-delay:.3s; }}
+.radar-dot.d2 {{ top:65%;left:35%;animation-delay:.7s; }}
+.radar-dot.d3 {{ top:45%;left:70%;animation-delay:1.1s; }}
+@keyframes dotBlink {{ 0%,100%{{opacity:0;}}50%{{opacity:1;}} }}
+.scan-steps {{ text-align:left;max-width:300px;margin:0 auto; }}
+.scan-step {{
+    font-family:'JetBrains Mono',monospace;font-size:.82rem;color:var(--dim);
+    padding:8px 0;transition:color .3s;letter-spacing:1px;
+}}
+.scan-step.active {{ color:var(--cyan); }}
+.scan-step.active .step-icon {{ color:var(--cyan);animation:spin 1s linear infinite;display:inline-block; }}
+.scan-step.done {{ color:var(--green); }}
+.scan-step.done .step-icon {{ content:'✓';color:var(--green); }}
+.scan-step .step-icon {{ display:inline-block;width:20px;text-align:center; }}
+.post-counter {{
+    display:flex;align-items:baseline;justify-content:center;gap:8px;
+    padding:16px;border-radius:12px;background:rgba(0,255,156,.06);
+    border:1px solid rgba(0,255,156,.2);
+}}
+.counter-num {{ font-family:'JetBrains Mono',monospace;font-size:2rem;font-weight:800;color:var(--green); }}
+.counter-lbl {{ font-family:'JetBrains Mono',monospace;font-size:.78rem;color:var(--dim);letter-spacing:2px;text-transform:uppercase; }}
+</style>
+<script>
+(function() {{
+    var steps = [
+        document.getElementById('step1'),
+        document.getElementById('step2'),
+        document.getElementById('step3'),
+        document.getElementById('step4')
+    ];
+    var stepIdx = 0;
+    var counter = document.getElementById('postCounter');
+    var counterNum = document.getElementById('counterNum');
+    var loadingMsg = document.getElementById('loadingMsg');
+    var errorMsg = document.getElementById('errorMsg');
+    var backBtn = document.getElementById('backBtn');
+
+    // Animate steps progressively
+    var stepInterval = setInterval(function() {{
+        if (stepIdx > 0) {{
+            steps[stepIdx - 1].classList.remove('active');
+            steps[stepIdx - 1].classList.add('done');
+            steps[stepIdx - 1].querySelector('.step-icon').textContent = '✓';
+        }}
+        if (stepIdx < steps.length) {{
+            steps[stepIdx].classList.add('active');
+            steps[stepIdx].querySelector('.step-icon').textContent = '◉';
+            stepIdx++;
+        }} else {{
+            stepIdx = 1; // loop back to keep "finding posts" active
+            steps[3].classList.remove('done');
+            steps[3].classList.add('active');
+            steps[3].querySelector('.step-icon').textContent = '◉';
+        }}
+    }}, 2500);
+
+    // Animate post counter after a delay
+    setTimeout(function() {{
+        counter.style.display = 'flex';
+        var n = 0;
+        var cInt = setInterval(function() {{
+            n += Math.floor(Math.random() * 3) + 1;
+            counterNum.textContent = n;
+        }}, 800);
+        window._cInt = cInt;
+    }}, 4000);
+
+    // Fetch the actual scrape result
+    fetch('{api_url}')
+        .then(function(r) {{ return r.text(); }})
+        .then(function(html) {{
+            clearInterval(stepInterval);
+            if (window._cInt) clearInterval(window._cInt);
+            // Replace entire page with gallery HTML
+            document.open();
+            document.write(html);
+            document.close();
+        }})
+        .catch(function(err) {{
+            clearInterval(stepInterval);
+            if (window._cInt) clearInterval(window._cInt);
+            loadingMsg.style.display = 'none';
+            errorMsg.style.display = 'block';
+            errorMsg.textContent = 'Scan failed: ' + err.message;
+            backBtn.style.display = 'inline-block';
+        }});
+}})();
+</script>"""
+
+    return base_page(f"Cipher · Scanning @{username}", body, user, extra)
 
 
 # ── Payment page ──────────────────────────────────────────────

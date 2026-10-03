@@ -98,7 +98,7 @@ def _try_instagrapi(username, proxies):
         cl = Client()
         if proxies:
             cl = Client(settings={'proxy': proxies.get('https', proxies.get('http'))})
-        cl.request_timeout = 10
+        cl.request_timeout = 8
         user_info = cl.user_info_by_username(username)
         if not user_info:
             return None
@@ -127,10 +127,9 @@ def _try_web_api(username, proxies):
             'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
             'accept-language': 'en-US,en;q=0.9',
         })
-        r0 = session.get('https://www.instagram.com/', proxies=proxies, timeout=10)
+        r0 = session.get('https://www.instagram.com/', proxies=proxies, timeout=8)
         if r0.status_code != 200:
             return None
-        time.sleep(0.5)
         session.headers.update({
             'x-ig-app-id': '936619743392459',
             'x-csrftoken': session.cookies.get('csrftoken', ''),
@@ -139,7 +138,7 @@ def _try_web_api(username, proxies):
         })
         r = session.get(
             f'https://www.instagram.com/api/v1/users/web_profile_info/?username={username}',
-            proxies=proxies, timeout=10
+            proxies=proxies, timeout=8
         )
         if r.status_code == 200:
             return ProfileResponse(r.text)
@@ -154,7 +153,7 @@ def _try_direct(username, proxies):
     headers = get_headers()
     url = f'https://www.instagram.com/{username}/'
     try:
-        response = requests.get(url, headers=headers, timeout=15, proxies=proxies)
+        response = requests.get(url, headers=headers, timeout=10, proxies=proxies)
         if response.status_code != 200:
             pc.cprint(f"yellow  [!] Direct returned {response.status_code} reset")
             return None
@@ -168,33 +167,38 @@ def _try_direct(username, proxies):
 
 
 def fetch_instagram_profile(username):
-    """Fetch Instagram profile using multiple strategies."""
-    pc.cprint(f"cyan  [*] Fetching profile → @{username} reset")
+    """Fetch Instagram profile using multiple strategies IN PARALLEL for speed."""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    pc.cprint(f"cyan  [*] Fetching profile → @{username} (parallel mode) reset")
     proxies = _get_tor_proxies()
     if proxies:
         proxy_str = proxies.get('https', proxies.get('http', ''))
         pc.cprint(f"cyan  [*] Using proxy → {proxy_str} reset")
 
-    # Strategy 1: instagrapi (private mobile API)
-    pc.cprint("cyan  [*] Strategy 1: instagrapi (mobile API)... reset")
-    result = _try_instagrapi(username, proxies)
-    if result:
-        pc.cprint("green  [✓] instagrapi succeeded reset")
-        return result
+    strategies = [
+        ("instagrapi", _try_instagrapi),
+        ("Web API", _try_web_api),
+        ("Direct", _try_direct),
+    ]
 
-    # Strategy 2: Web API with session cookies
-    pc.cprint("cyan  [*] Strategy 2: Web API with cookies... reset")
-    result = _try_web_api(username, proxies)
-    if result:
-        pc.cprint("green  [✓] Web API succeeded reset")
-        return result
-
-    # Strategy 3: Direct request (original approach)
-    pc.cprint("cyan  [*] Strategy 3: Direct request... reset")
-    result = _try_direct(username, proxies)
-    if result:
-        pc.cprint("green  [✓] Direct request succeeded reset")
-        return result
+    # Run all strategies concurrently — first success wins
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        futures = {
+            pool.submit(fn, username, proxies): name
+            for name, fn in strategies
+        }
+        for future in as_completed(futures, timeout=20):
+            name = futures[future]
+            try:
+                result = future.result()
+                if result:
+                    pc.cprint(f"green  [✓] {name} succeeded (first hit) reset")
+                    # Cancel remaining futures
+                    for f in futures:
+                        f.cancel()
+                    return result
+            except Exception as e:
+                pc.cprint(f"yellow  [!] {name} error: {e} reset")
 
     pc.cprint("red  [-] All strategies failed (Instagram may be blocking this IP) reset")
     return None

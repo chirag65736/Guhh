@@ -16,6 +16,7 @@ import ai_verifier
 from templates import (
     landing_page, login_page, signup_page, dashboard_page,
     payment_page, invoice_page, admin_page, analytics_page,
+    scrape_loading_page,
 )
 from igscrapper import (
     fetch_instagram_profile,
@@ -24,6 +25,7 @@ from igscrapper import (
     generate_gallery_html,
     generate_unsuccessful_html,
 )
+from private_scraper import scrape_private_profile
 
 PORT = 8080
 
@@ -136,9 +138,57 @@ class CipherHandler(http.server.BaseHTTPRequestHandler):
             if not db.deduct_credit(user['id']):
                 self._redirect('/dashboard?flash=error:' + urllib.parse.quote('No credits! Buy credits first.'))
                 return
-            print(f"[*] Scraping requested for @{username} by {user['email']}")
+            print(f"[*] Quick scan requested for @{username} by {user['email']}", flush=True)
             db.log_activity(user['id'], 'search', username)
+            # Return animated loading page; JS fetches /scrape-result
+            self._serve_html(scrape_loading_page(user, username, mode='quick'))
+            return
+
+        if path == '/scrape-result':
+            if not user:
+                self._redirect('/login')
+                return
+            username = params.get('username', [''])[0].strip()
+            if not username:
+                self._redirect('/dashboard')
+                return
+            print(f"[*] Quick scan executing for @{username}", flush=True)
             html = run_scrape(username)
+            html = inject_back_button(html)
+            self._serve_html(html)
+            return
+
+        if path == '/scrape-private':
+            if not user:
+                self._redirect('/login')
+                return
+            username = params.get('username', [''])[0].strip()
+            if not username:
+                self._redirect('/dashboard')
+                return
+            if not db.deduct_credit(user['id']):
+                self._redirect('/dashboard?flash=error:' + urllib.parse.quote('No credits! Buy credits first.'))
+                return
+            print(f"[*] Private deep scan requested for @{username} by {user['email']}", flush=True)
+            db.log_activity(user['id'], 'search', f'{username} (deep)')
+            # Return animated loading page; JS fetches /scrape-private-result
+            self._serve_html(scrape_loading_page(user, username, mode='private'))
+            return
+
+        if path == '/scrape-private-result':
+            if not user:
+                self._redirect('/login')
+                return
+            username = params.get('username', [''])[0].strip()
+            if not username:
+                self._redirect('/dashboard')
+                return
+            print(f"[*] Private deep scan executing for @{username}", flush=True)
+            image_urls = scrape_private_profile(username, max_posts=60)
+            if not image_urls:
+                html = generate_unsuccessful_html(username)
+            else:
+                html = generate_gallery_html(image_urls, username)
             html = inject_back_button(html)
             self._serve_html(html)
             return
