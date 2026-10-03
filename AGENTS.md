@@ -37,8 +37,18 @@ docker compose -f docker-compose.base44.yml up -d --build
 App listens on port 3000 (maps to 8080 inside container). Health check: `GET /`.
 SQLite DB persists in a named Docker volume (`cipher_data`).
 
+## UPI Payment System
+- **upi_payment.py** — multipart form parser, screenshot saving, UPI ID (gk29052005@ptaxis).
+- **ai_verifier.py** — OpenAI GPT-4o Vision integration; analyzes screenshots and
+  suggests verified/suspicious/rejected. Falls back to 'manual' without OPENAI_API_KEY.
+- UPI is the primary payment method on the payment page (QR code + copy UPI ID).
+- After paying, users submit: sender name, UTR number, payment screenshot.
+- AI analyzes the screenshot and suggests approve/reject; admin makes final call.
+- Screenshots are stored privately in `data/screenshots/` (admin-only via /screenshot).
+- Admin panel shows UPI Payment Verifications section with AI recommendation + approve/reject.
+
 ## Notes
 - Instagram may block scraping from datacenter IPs; the app shows an
   "Unsuccessful" page if the profile fetch fails.
-- No external secrets required.
+- OPENAI_API_KEY is optional — without it, UPI submissions default to manual admin review.
 - No live-reload dev server; call `reload_preview` after code changes.

@@ -4,6 +4,7 @@
   "startCommand": "docker compose -f docker-compose.base44.yml up -d",
   "secrets": [
     {"name": "GMAIL_USER", "description": "Gmail address to send invoice emails from (e.g. chiragkashyap201@gmail.com). Enable 2FA and create an App Password at myaccount.google.com/apppasswords", "requiredAtBoot": false},
-    {"name": "GMAIL_APP_PASSWORD", "description": "Gmail App Password (16-char code from myaccount.google.com/apppasswords) for the sending account", "requiredAtBoot": false}
+    {"name": "GMAIL_APP_PASSWORD", "description": "Gmail App Password (16-char code from myaccount.google.com/apppasswords) for the sending account", "requiredAtBoot": false},
+    {"name": "OPENAI_API_KEY", "description": "OpenAI API key for GPT-4o Vision to verify UPI payment screenshots. Get it from platform.openai.com/api-keys. Without this, all submissions default to manual admin review.", "requiredAtBoot": false}
   ]
 }
