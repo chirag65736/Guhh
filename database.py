@@ -89,6 +89,14 @@ def init_db():
             is_active INTEGER DEFAULT 1,
             created_at TEXT DEFAULT (datetime('now'))
         );
+        CREATE TABLE IF NOT EXISTS activity (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            action TEXT NOT NULL,
+            target TEXT,
+            created_at TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        );
     ''')
 
     # Create admin user if not exists
@@ -351,3 +359,53 @@ def delete_payment_method(method_id):
     conn.execute('DELETE FROM payment_methods WHERE id = ?', (method_id,))
     conn.commit()
     conn.close()
+
+
+# ── Activity / Analytics ──────────────────────────────────────
+
+def log_activity(user_id, action, target=None):
+    conn = get_db()
+    conn.execute(
+        'INSERT INTO activity (user_id, action, target) VALUES (?, ?, ?)',
+        (user_id, action, target)
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_analytics():
+    """Per-user search and download counts, heaviest users first."""
+    conn = get_db()
+    rows = conn.execute('''
+        SELECT u.id, u.name, u.email,
+            COUNT(CASE WHEN a.action = 'search'   THEN 1 END) AS searches,
+            COUNT(CASE WHEN a.action = 'download' THEN 1 END) AS downloads
+        FROM users u
+        LEFT JOIN activity a ON u.id = a.user_id
+        WHERE u.is_admin = 0
+        GROUP BY u.id
+        ORDER BY (searches + downloads) DESC, searches DESC
+    ''').fetchall()
+    conn.close()
+    return rows
+
+
+def get_analytics_summary():
+    """Overall totals for the analytics dashboard."""
+    conn = get_db()
+    total_searches = conn.execute(
+        "SELECT COUNT(*) AS c FROM activity WHERE action = 'search'"
+    ).fetchone()['c']
+    total_downloads = conn.execute(
+        "SELECT COUNT(*) AS c FROM activity WHERE action = 'download'"
+    ).fetchone()['c']
+    active_users = conn.execute('''
+        SELECT COUNT(DISTINCT user_id) AS c
+        FROM activity
+    ''').fetchone()['c']
+    conn.close()
+    return {
+        'searches': total_searches,
+        'downloads': total_downloads,
+        'active_users': active_users,
+    }

@@ -12,7 +12,7 @@ import database as db
 import email_sender
 from templates import (
     landing_page, login_page, signup_page, dashboard_page,
-    payment_page, invoice_page, admin_page,
+    payment_page, invoice_page, admin_page, analytics_page,
 )
 from igscrapper import (
     fetch_instagram_profile,
@@ -30,12 +30,33 @@ BACK_BUTTON = """
 </div>
 """
 
+# JS injected into scrape-result pages to count downloads without
+# changing the scraper. Uses fetch keepalive so the beacon survives
+# the browser's download navigation.
+DOWNLOAD_TRACKER = """
+<script>
+document.addEventListener('click', function(e) {
+    var btn = e.target.closest('.download-btn');
+    if (btn) {
+        var url = btn.getAttribute('href') || '';
+        fetch('/track-download', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: 'url=' + encodeURIComponent(url),
+            keepalive: true
+        }).catch(function(){});
+    }
+}, true);
+</script>
+"""
+
 
 def inject_back_button(html):
-    """Inject a floating back button before </body>."""
+    """Inject a floating back button + download tracker before </body>."""
+    extra = BACK_BUTTON + DOWNLOAD_TRACKER
     if '</body>' in html:
-        return html.replace('</body>', BACK_BUTTON + '</body>', 1)
-    return html + BACK_BUTTON
+        return html.replace('</body>', extra + '</body>', 1)
+    return html + extra
 
 
 # ── Scraping pipeline (unchanged) ─────────────────────────────
@@ -113,6 +134,7 @@ class CipherHandler(http.server.BaseHTTPRequestHandler):
                 self._redirect('/dashboard?flash=error:' + urllib.parse.quote('No credits! Buy credits first.'))
                 return
             print(f"[*] Scraping requested for @{username} by {user['email']}")
+            db.log_activity(user['id'], 'search', username)
             html = run_scrape(username)
             html = inject_back_button(html)
             self._serve_html(html)
@@ -152,6 +174,15 @@ class CipherHandler(http.server.BaseHTTPRequestHandler):
                 user, db.get_stats(), db.get_all_users(),
                 db.get_all_payments(), db.get_all_gift_cards(),
                 db.get_all_invoices(), db.get_all_payment_methods(), flash
+            ))
+            return
+
+        if path == '/analytics':
+            if not user or not user['is_admin']:
+                self._redirect('/login')
+                return
+            self._serve_html(analytics_page(
+                user, db.get_analytics_summary(), db.get_analytics()
             ))
             return
 
@@ -238,6 +269,17 @@ class CipherHandler(http.server.BaseHTTPRequestHandler):
             )
 
             self._redirect(f'/invoice?id={inv_id}')
+            return
+
+        if path == '/track-download':
+            if not user:
+                self.send_response(204)
+                self.end_headers()
+                return
+            url = body.get('url', [''])[0]
+            db.log_activity(user['id'], 'download', url)
+            self.send_response(204)
+            self.end_headers()
             return
 
         if path == '/admin/create-giftcard':

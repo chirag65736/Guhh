@@ -360,6 +360,7 @@ def nav_bar(user=None):
         links = f'<a href="/dashboard">Dashboard</a>'
         if user['is_admin']:
             links += '<a href="/admin">Admin Panel</a>'
+            links += '<a href="/analytics">Analytics</a>'
         links += f'<span class="nav-credits">⚡ {user["credits"]} Credits</span>'
         links += '<a href="/logout" class="nav-logout">Logout</a>'
     else:
@@ -849,3 +850,39 @@ def admin_page(user, stats, users, payments, gift_cards, invoices, payment_metho
 
     body = stats_html + add_credits + payment_methods_section + gift_create + gift_table + users_table + pay_table + inv_table
     return base_page("Cipher · Admin Panel", body, user)
+
+
+# ── Analytics dashboard ──────────────────────────────────────
+
+def analytics_page(user, summary, rows):
+    # Overall stat cards
+    stats_html = f"""
+    <div class="stats-grid">
+        <div class="stat-card cyan"><div class="stat-label">Total Searches</div><div class="stat-value">{summary['searches']}</div></div>
+        <div class="stat-card magenta"><div class="stat-label">Total Downloads</div><div class="stat-value">{summary['downloads']}</div></div>
+        <div class="stat-card green"><div class="stat-label">Active Users</div><div class="stat-value">{summary['active_users']}</div></div>
+    </div>"""
+
+    # Per-user table
+    user_rows_html = ''
+    for r in rows:
+        total = r['searches'] + r['downloads']
+        user_rows_html += f"""<tr>
+            <td>{r['name']}</td>
+            <td style="font-size:.75rem;color:var(--dim);">{r['email']}</td>
+            <td style="color:var(--cyan);font-weight:700;">{r['searches']}</td>
+            <td style="color:var(--magenta);font-weight:700;">{r['downloads']}</td>
+            <td style="color:var(--green);font-weight:700;">{total}</td>
+        </tr>"""
+
+    table_html = f"""
+    <div class="card">
+        <h2>📊 Per-User Activity</h2>
+        <div class="table-wrap"><table>
+            <thead><tr><th>User</th><th>Email</th><th>Searches</th><th>Downloads</th><th>Total</th></tr></thead>
+            <tbody>{user_rows_html if user_rows_html else '<tr><td colspan="5" style="text-align:center;color:var(--dim);">No activity recorded yet</td></tr>'}</tbody>
+        </table></div>
+    </div>"""
+
+    body = stats_html + table_html
+    return base_page("Cipher · Analytics", body, user)
