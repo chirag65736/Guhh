@@ -1,0 +1,10 @@
+requests
+beautifulsoup4
+lxml
+html5lib
+parascode
+PySocks
+instagrapi
+curl_cffi
+instaloader
+playwright

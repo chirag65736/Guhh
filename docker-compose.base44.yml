@@ -1,0 +1,26 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.base44
+    working_dir: /app
+    volumes:
+      - .:/app
+      - cipher_data:/app/data
+    ports:
+      - "3000:8080"
+    command: ["sh", "-ec", "tor --RunAsDaemon 1 && sleep 5 && exec python web_server.py"]
+    environment:
+      - INSTAGRAM_PROXY=socks5://127.0.0.1:9050
+    env_file:
+      - /run/base44/app.env
+    restart: on-failure
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 45s
+
+volumes:
+  cipher_data:
