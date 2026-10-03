@@ -447,6 +447,8 @@ SCAN_ICON = '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" xmlns
 
 DEEP_ICON = '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle;"><defs><linearGradient id="dgrd1" x1="0" y1="0" x2="24" y2="24"><stop offset="0" stop-color="#ff2bd6"/><stop offset="1" stop-color="#7c3aed"/></linearGradient></defs><circle cx="12" cy="12" r="11" fill="rgba(255,43,214,.06)" stroke="url(#dgrd1)" stroke-width="1.5"/><path d="M12 5 L17 8.5 V15.5 L12 19 L7 15.5 V8.5 Z" fill="none" stroke="url(#dgrd1)" stroke-width="1.2"/><circle cx="10" cy="10" r="3.5" fill="none" stroke="url(#dgrd1)" stroke-width="1.6"/><path d="M12.5 12.5 L16 16" stroke="url(#dgrd1)" stroke-width="1.8" stroke-linecap="round"/></svg>'
 
+STEALTH_ICON = '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle;"><defs><linearGradient id="stgrd1" x1="0" y1="0" x2="24" y2="24"><stop offset="0" stop-color="#ffd700"/><stop offset="1" stop-color="#ff8c00"/></linearGradient></defs><circle cx="12" cy="12" r="11" fill="rgba(255,215,0,.06)" stroke="url(#stgrd1)" stroke-width="1.5"/><path d="M12 5 L17 8.5 V15.5 L12 19 L7 15.5 V8.5 Z" fill="none" stroke="url(#stgrd1)" stroke-width="1.2"/><path d="M8 11 L10 13 L16 9" stroke="url(#stgrd1)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/><circle cx="12" cy="12" r="1.2" fill="url(#stgrd1)" opacity=".5"/></svg>'
+
 # ── Reviews section (reusable, shown at bottom of pages) ──────
 
 REVIEW_JS = """
@@ -844,6 +846,13 @@ def dashboard_page(user, flash=None, reviews=None):
                 <button type="submit" class="btn btn-outline" style="border-color:var(--magenta);color:var(--magenta);">{DEEP_ICON} Deep Scan</button>
             </form>
         </div>
+        <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--line);">
+            <p style="color:var(--dim);font-size:.78rem;margin-bottom:12px;">🛡 <b style="color:var(--gold);">Stealth Scan</b> — 4-strategy engine (curl_cffi + GraphQL + instagrapi). Finds up to <b>80 posts</b>. Best for private profiles. <b style="color:var(--gold);">3 credits</b> per scan.</p>
+            <form action="/scrape-stealth" method="get" style="display:flex;gap:12px;flex-wrap:wrap;">
+                <input type="text" name="username" placeholder="Instagram username..." required style="flex:1;min-width:200px;" autocomplete="off">
+                <button type="submit" class="btn btn-outline" style="border-color:var(--gold);color:var(--gold);">{STEALTH_ICON} Stealth Scan</button>
+            </form>
+        </div>
     </div>"""
 
     # Per-post payment
@@ -902,14 +911,25 @@ def scrape_loading_page(user, username, mode='quick'):
     """Animated loading page shown while the scraper works.
     JS fetches the actual result from /scrape-result or /scrape-private-result
     and swaps the page content when done."""
-    api_url = f"/scrape-result?username={urllib.parse.quote(username)}" if mode == 'quick' \
-        else f"/scrape-private-result?username={urllib.parse.quote(username)}"
-    mode_label = 'Quick Scan' if mode == 'quick' else 'Private Deep Scan'
-    mode_color = 'var(--cyan)' if mode == 'quick' else 'var(--magenta)'
+    if mode == 'quick':
+        api_url = f"/scrape-result?username={urllib.parse.quote(username)}"
+        mode_label = 'Quick Scan'
+        mode_color = 'var(--cyan)'
+        mode_icon = SCAN_ICON
+    elif mode == 'stealth':
+        api_url = f"/scrape-stealth-result?username={urllib.parse.quote(username)}"
+        mode_label = 'Stealth Scan'
+        mode_color = 'var(--gold)'
+        mode_icon = STEALTH_ICON
+    else:
+        api_url = f"/scrape-private-result?username={urllib.parse.quote(username)}"
+        mode_label = 'Private Deep Scan'
+        mode_color = 'var(--magenta)'
+        mode_icon = DEEP_ICON
 
     body = f"""
     <div class="card" style="text-align:center;max-width:520px;margin:0 auto;">
-        <h2 style="color:{mode_color};">{SCAN_ICON if mode == 'quick' else DEEP_ICON} {mode_label}</h2>
+        <h2 style="color:{mode_color};">{mode_icon} {mode_label}</h2>
         <p style="color:var(--dim);font-size:.85rem;margin-bottom:24px;">Target: <b style="color:{mode_color};">@{username}</b></p>
 
         <!-- Radar scanner animation -->
@@ -935,7 +955,7 @@ def scrape_loading_page(user, username, mode='quick'):
                 <span class="step-icon">○</span> Fetching profile data...
             </div>
             <div class="scan-step" id="step3">
-                <span class="step-icon">○</span> Finding posts{'...' if mode == 'quick' else ' (paginating)...'}
+                <span class="step-icon">○</span> Finding posts{'...' if mode == 'quick' else ' (multi-strategy)...'}
             </div>
             <div class="scan-step" id="step4">
                 <span class="step-icon">○</span> Building gallery...

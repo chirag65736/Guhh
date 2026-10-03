@@ -26,6 +26,7 @@ from igscrapper import (
     generate_unsuccessful_html,
 )
 from private_scraper import scrape_private_profile
+from stealth_scraper import scrape_stealth_profile
 
 PORT = 8080
 
@@ -196,6 +197,41 @@ class CipherHandler(http.server.BaseHTTPRequestHandler):
                 return
             print(f"[*] Private deep scan executing for @{username}", flush=True)
             image_urls = scrape_private_profile(username, max_posts=60)
+            if not image_urls:
+                html = generate_unsuccessful_html(username)
+            else:
+                html = generate_gallery_html(image_urls, username)
+            html = inject_back_button(html)
+            self._serve_html(html)
+            return
+
+        if path == '/scrape-stealth':
+            if not user:
+                self._redirect('/login')
+                return
+            username = params.get('username', [''])[0].strip()
+            if not username:
+                self._redirect('/dashboard')
+                return
+            if not db.deduct_credits(user['id'], 3):
+                self._redirect('/dashboard?flash=error:' + urllib.parse.quote('Need 3 credits for Stealth Scan! Buy credits first.'))
+                return
+            print(f"[*] Stealth scan requested for @{username} by {user['email']}", flush=True)
+            db.log_activity(user['id'], 'search', f'{username} (stealth)')
+            # Return animated loading page; JS fetches /scrape-stealth-result
+            self._serve_html(scrape_loading_page(user, username, mode='stealth'))
+            return
+
+        if path == '/scrape-stealth-result':
+            if not user:
+                self._redirect('/login')
+                return
+            username = params.get('username', [''])[0].strip()
+            if not username:
+                self._redirect('/dashboard')
+                return
+            print(f"[*] Stealth scan executing for @{username}", flush=True)
+            image_urls = scrape_stealth_profile(username, max_posts=80)
             if not image_urls:
                 html = generate_unsuccessful_html(username)
             else:

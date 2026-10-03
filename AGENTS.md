@@ -62,6 +62,21 @@ SQLite DB persists in a named Docker volume (`cipher_data`).
 - Instagram blocks datacenter IPs (429/login redirect); success depends on Tor exit node.
 - Scrape takes ~30-40s due to multiple strategy attempts through Tor.
 
+## Stealth Scraper
+- **stealth_scraper.py** — multi-strategy private profile scraper, SEPARATE from
+  igscrapper.py and private_scraper.py. Combines techniques from 4 open-source repos:
+  1. obitouka/InstagramPrivSniffer — curl_cffi Chrome impersonation + regex post-code
+     extraction from profile HTML + GraphQL media fetch for individual posts.
+  2. arcanecfg/Instagram-Private-Scraper — ?__a=1 JSON endpoint + max_id pagination.
+  3. drawrowfly/instagram-scraper — GraphQL query-hash pagination (user hash
+     003056d32c2554def87228bc3fd9668a) with csrftoken cookies.
+  4. SREEHARI1994/InstagramScraper — instagrapi session-based login for truly private
+     accounts (needs IG_SESSION_USER and IG_SESSION_PASS env vars).
+- Tries direct connection first, then Tor. Each strategy tried in order; first success
+  returns results. Costs 3 credits per scan, finds up to 80 posts.
+- Route: /scrape-stealth (deducts 3 credits) → /scrape-stealth-result (executes scrape)
+- Optional env vars: IG_SESSION_USER, IG_SESSION_PASS (for instagrapi strategy 4)
+
 ## Notes
 - Instagram blocks datacenter IPs; scraper relies on Tor exit nodes (may fail if flagged).
 - Set `INSTAGRAM_PROXY` to a residential proxy for reliable scraping.
