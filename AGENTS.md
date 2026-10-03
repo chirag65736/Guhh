@@ -64,7 +64,7 @@ SQLite DB persists in a named Docker volume (`cipher_data`).
 
 ## Stealth Scraper
 - **stealth_scraper.py** — multi-strategy private profile scraper, SEPARATE from
-  igscrapper.py and private_scraper.py. Combines techniques from 4 open-source repos:
+  igscrapper.py and private_scraper.py. Combines techniques from 7 strategies:
   1. obitouka/InstagramPrivSniffer — curl_cffi Chrome impersonation + regex post-code
      extraction from profile HTML + GraphQL media fetch for individual posts.
   2. arcanecfg/Instagram-Private-Scraper — ?__a=1 JSON endpoint + max_id pagination.
@@ -72,10 +72,26 @@ SQLite DB persists in a named Docker volume (`cipher_data`).
      003056d32c2554def87228bc3fd9668a) with csrftoken cookies.
   4. SREEHARI1994/InstagramScraper — instagrapi session-based login for truly private
      accounts (needs IG_SESSION_USER and IG_SESSION_PASS env vars).
-- Tries direct connection first, then Tor. Each strategy tried in order; first success
-  returns results. Costs 3 credits per scan, finds up to 80 posts.
+  5. instaloader/instaloader — iterates ALL posts via Profile.get_posts() lazy iterator.
+     Gets the most posts (no hard limit). Best for extracting every single post.
+  6. web_profile_info API — uses Instagram's web_profile_info API + GraphQL pagination
+     (same approach as private_scraper.py). Most reliable for direct connection.
+  7. kevmaindev/Instagram-Followers-Scraper_Suite — session-based API using IG_SESSION_ID
+     cookie + friendships endpoint for private accounts.
+- Tries ALL strategies and returns the result from whichever scraper found the MOST posts
+  (not first-success-wins). Skips Tor if direct already found >=5 posts.
+- Costs 3 credits per scan, finds up to 80 posts.
 - Route: /scrape-stealth (deducts 3 credits) → /scrape-stealth-result (executes scrape)
-- Optional env vars: IG_SESSION_USER, IG_SESSION_PASS (for instagrapi strategy 4)
+- Optional env vars: IG_SESSION_USER, IG_SESSION_PASS, IG_SESSION_ID
+
+## Profile Info Scraper
+- **profile_info_scraper.py** — separate scraper for Instagram private account info.
+  Extracts: followers, following, total posts, bio, profile picture URL, is_private,
+  is_verified, full_name, external_url, category.
+- Uses 4 strategies: web_profile_info API, HTML meta tags, instaloader Profile, session API.
+- Costs 1 credit per scan.
+- Route: /scrape-profile-info (deducts 1 credit) → /scrape-profile-info-result (executes)
+- Displays results in a dedicated profile info HTML page with stats cards.
 
 ## Notes
 - Instagram blocks datacenter IPs; scraper relies on Tor exit nodes (may fail if flagged).

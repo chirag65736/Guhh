@@ -25,8 +25,195 @@ from igscrapper import (
     generate_gallery_html,
     generate_unsuccessful_html,
 )
+
+
+def _generate_profile_info_html(info, username):
+    """Generate HTML page showing Instagram profile info (followers, following, etc.)."""
+    followers = info.get('followers', '?')
+    following = info.get('following', '?')
+    posts = info.get('posts', '?')
+    full_name = info.get('full_name', '')
+    bio = info.get('bio', '')
+    profile_pic = info.get('profile_pic_url', '')
+    is_private = info.get('is_private', False)
+    is_verified = info.get('is_verified', False)
+    external_url = info.get('external_url', '')
+    category = info.get('category', '')
+
+    private_badge = '🔒 Private' if is_private else '🌐 Public'
+    verified_badge = ' ✓ Verified' if is_verified else ''
+
+    ext_html = f'<div class="info-row"><span class="info-label">🔗 External URL</span><span class="info-value"><a href="{external_url}" target="_blank" style="color:#00e5ff;">{external_url}</a></span></div>' if external_url else ''
+    cat_html = f'<div class="info-row"><span class="info-label">🏷️ Category</span><span class="info-value">{category}</span></div>' if category else ''
+    pic_html = f'<img src="{profile_pic}" alt="Profile" style="width:120px;height:120px;border-radius:50%;border:3px solid #00e5ff;box-shadow:0 0 20px rgba(0,229,255,.3);object-fit:cover;" />' if profile_pic else ''
+    bio_html = f'<div class="info-row"><span class="info-label">📝 Bio</span><span class="info-value" style="white-space:pre-wrap;">{bio}</span></div>' if bio else ''
+
+    return f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cɪᴘʜᴇʀ · Profile Info — @{username}</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        * {{ margin:0; padding:0; box-sizing:border-box; }}
+        :root {{
+            --bg-0:#05060a; --bg-1:#0a0d14; --bg-2:#111624;
+            --line:rgba(0,255,255,.15); --cyan:#00e5ff; --magenta:#ff2bd6;
+            --green:#00ff9c; --text:#e6f1ff; --dim:#7a8aa3;
+        }}
+        body {{
+            font-family:'Inter',sans-serif; background:var(--bg-0); color:var(--text);
+            min-height:100vh; padding:24px 18px;
+            background-image:radial-gradient(circle at 15% 10%,rgba(0,229,255,.10),transparent 45%),radial-gradient(circle at 85% 90%,rgba(255,43,214,.10),transparent 45%),linear-gradient(180deg,#05060a 0%,#0a0d14 100%);
+            background-attachment:fixed;
+        }}
+        body::before {{
+            content:''; position:fixed; inset:0;
+            background-image:linear-gradient(rgba(0,229,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,255,.035) 1px,transparent 1px);
+            background-size:40px 40px; pointer-events:none; z-index:0;
+        }}
+        .container {{
+            position:relative; z-index:1; max-width:700px; margin:0 auto;
+            background:rgba(10,13,20,.75); border:1px solid var(--line); border-radius:20px;
+            padding:36px 30px; backdrop-filter:blur(14px);
+            box-shadow:0 0 0 1px rgba(0,229,255,.05),0 30px 80px rgba(0,0,0,.7);
+        }}
+        .header {{ text-align:center; margin-bottom:30px; }}
+        .brand {{
+            font-family:'JetBrains Mono',monospace; font-size:2.2rem; font-weight:800;
+            letter-spacing:4px; background:linear-gradient(90deg,var(--cyan),var(--magenta));
+            -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
+            text-shadow:0 0 40px rgba(0,229,255,.35); margin-bottom:6px;
+        }}
+        .brand-sub {{
+            font-family:'JetBrains Mono',monospace; font-size:.72rem; color:var(--dim);
+            letter-spacing:6px; text-transform:uppercase; margin-bottom:20px;
+        }}
+        .profile-section {{
+            display:flex; flex-direction:column; align-items:center; gap:16px;
+            padding:30px 20px; border-radius:16px; margin-bottom:24px;
+            background:linear-gradient(135deg,rgba(0,229,255,.06),rgba(255,43,214,.06));
+            border:1px solid var(--line);
+        }}
+        .full-name {{
+            font-family:'JetBrains Mono',monospace; font-size:1.4rem; font-weight:700;
+            color:var(--text);
+        }}
+        .username-tag {{
+            font-family:'JetBrains Mono',monospace; font-size:.95rem; color:var(--cyan);
+        }}
+        .badges {{ display:flex; gap:10px; flex-wrap:wrap; justify-content:center; }}
+        .badge {{
+            font-family:'JetBrains Mono',monospace; font-size:.72rem; letter-spacing:1px;
+            padding:6px 14px; border-radius:30px; text-transform:uppercase; font-weight:600;
+        }}
+        .badge.private {{ color:var(--magenta); border:1px solid rgba(255,43,214,.5); background:rgba(255,43,214,.08); }}
+        .badge.public {{ color:var(--green); border:1px solid rgba(0,255,156,.5); background:rgba(0,255,156,.08); }}
+        .badge.verified {{ color:#00e5ff; border:1px solid rgba(0,229,255,.5); background:rgba(0,229,255,.08); }}
+        .stats-grid {{
+            display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:24px;
+        }}
+        .stat-card {{
+            background:rgba(5,6,10,.7); border:1px solid var(--line); border-radius:14px;
+            padding:22px 14px; text-align:center;
+        }}
+        .stat-card .num {{
+            font-family:'JetBrains Mono',monospace; font-size:2rem; font-weight:800;
+            color:var(--cyan); text-shadow:0 0 20px rgba(0,229,255,.4);
+        }}
+        .stat-card .lbl {{
+            font-size:.72rem; letter-spacing:2px; color:var(--dim);
+            text-transform:uppercase; margin-top:6px;
+        }}
+        .info-section {{
+            background:rgba(5,6,10,.5); border:1px solid var(--line); border-radius:14px;
+            padding:20px; margin-bottom:16px;
+        }}
+        .info-row {{
+            display:flex; justify-content:space-between; align-items:flex-start;
+            padding:12px 0; border-bottom:1px solid rgba(0,229,255,.08); gap:12px;
+        }}
+        .info-row:last-child {{ border-bottom:none; }}
+        .info-label {{
+            font-family:'JetBrains Mono',monospace; font-size:.78rem; color:var(--dim);
+            letter-spacing:1px; white-space:nowrap;
+        }}
+        .info-value {{
+            font-size:.88rem; color:var(--text); text-align:right; word-break:break-word;
+            font-style:italic; font-weight:600;
+        }}
+        .footer {{
+            text-align:center; margin-top:30px; padding-top:20px;
+            border-top:1px solid var(--line); color:var(--dim); font-size:.82rem;
+        }}
+        .footer .brand-mini {{
+            font-family:'JetBrains Mono',monospace; color:var(--cyan);
+            letter-spacing:3px; font-weight:700; margin-bottom:6px;
+        }}
+        .footer .made {{
+            font-family:'JetBrains Mono',monospace; font-size:.72rem;
+            color:var(--magenta); margin-top:4px; letter-spacing:1px;
+        }}
+        @media(max-width:600px) {{
+            .container {{ padding:20px 16px; }}
+            .stats-grid {{ grid-template-columns:1fr; }}
+            .brand {{ font-size:1.8rem; letter-spacing:2px; }}
+            .stat-card .num {{ font-size:1.6rem; }}
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="brand">Cɪᴘʜᴇʀ</div>
+            <div class="brand-sub">Profile Intelligence Engine</div>
+        </div>
+
+        <div class="profile-section">
+            {pic_html}
+            <div class="full-name">{full_name}{verified_badge}</div>
+            <div class="username-tag">@{username}</div>
+            <div class="badges">
+                <span class="badge {'private' if is_private else 'public'}">{private_badge}</span>
+                {'<span class="badge verified">✓ Verified</span>' if is_verified else ''}
+            </div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="num">{followers:,}</div>
+                <div class="lbl">Followers</div>
+            </div>
+            <div class="stat-card">
+                <div class="num">{following:,}</div>
+                <div class="lbl">Following</div>
+            </div>
+            <div class="stat-card">
+                <div class="num">{posts:,}</div>
+                <div class="lbl">Posts</div>
+            </div>
+        </div>
+
+        <div class="info-section">
+            {bio_html}
+            {cat_html}
+            {ext_html}
+        </div>
+
+        <div class="footer">
+            <div class="brand-mini">Cɪᴘʜᴇʀ</div>
+            <div>Instagram Profile Intelligence — POC</div>
+            <div class="made">◈ Made by Ryon · CipherXPortal ◈</div>
+        </div>
+    </div>
+</body>
+</html>
+    """
 from private_scraper import scrape_private_profile
 from stealth_scraper import scrape_stealth_profile
+from profile_info_scraper import scrape_profile_info
 
 PORT = 8080
 
@@ -236,6 +423,40 @@ class CipherHandler(http.server.BaseHTTPRequestHandler):
                 html = generate_unsuccessful_html(username)
             else:
                 html = generate_gallery_html(image_urls, username)
+            html = inject_back_button(html)
+            self._serve_html(html)
+            return
+
+        if path == '/scrape-profile-info':
+            if not user:
+                self._redirect('/login')
+                return
+            username = params.get('username', [''])[0].strip()
+            if not username:
+                self._redirect('/dashboard')
+                return
+            if not db.deduct_credits(user['id'], 1):
+                self._redirect('/dashboard?flash=error:' + urllib.parse.quote('Need 1 credit for Profile Info Scan! Buy credits first.'))
+                return
+            print(f"[*] Profile info scan requested for @{username} by {user['email']}", flush=True)
+            db.log_activity(user['id'], 'search', f'{username} (info)')
+            self._serve_html(scrape_loading_page(user, username, mode='info'))
+            return
+
+        if path == '/scrape-profile-info-result':
+            if not user:
+                self._redirect('/login')
+                return
+            username = params.get('username', [''])[0].strip()
+            if not username:
+                self._redirect('/dashboard')
+                return
+            print(f"[*] Profile info scan executing for @{username}", flush=True)
+            info = scrape_profile_info(username)
+            if not info:
+                html = generate_unsuccessful_html(username)
+            else:
+                html = _generate_profile_info_html(info, username)
             html = inject_back_button(html)
             self._serve_html(html)
             return

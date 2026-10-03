@@ -847,10 +847,17 @@ def dashboard_page(user, flash=None, reviews=None):
             </form>
         </div>
         <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--line);">
-            <p style="color:var(--dim);font-size:.78rem;margin-bottom:12px;">🛡 <b style="color:var(--gold);">Stealth Scan</b> — 4-strategy engine (curl_cffi + GraphQL + instagrapi). Finds up to <b>80 posts</b>. Best for private profiles. <b style="color:var(--gold);">3 credits</b> per scan.</p>
+            <p style="color:var(--dim);font-size:.78rem;margin-bottom:12px;">🛡 <b style="color:var(--gold);">Stealth Scan</b> — 6-strategy engine (curl_cffi + GraphQL + instagrapi + instaloader). Tries ALL scrapers, returns the one with the <b>most posts</b>. Best for private profiles. <b style="color:var(--gold);">3 credits</b> per scan.</p>
             <form action="/scrape-stealth" method="get" style="display:flex;gap:12px;flex-wrap:wrap;">
                 <input type="text" name="username" placeholder="Instagram username..." required style="flex:1;min-width:200px;" autocomplete="off">
                 <button type="submit" class="btn btn-outline" style="border-color:var(--gold);color:var(--gold);">{STEALTH_ICON} Stealth Scan</button>
+            </form>
+        </div>
+        <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--line);">
+            <p style="color:var(--dim);font-size:.78rem;margin-bottom:12px;">🔍 <b style="color:#00ff9c;">Profile Info Scan</b> — extracts private account info: <b>followers, following, total posts, bio, profile picture</b>. <b style="color:#00ff9c;">1 credit</b> per scan.</p>
+            <form action="/scrape-profile-info" method="get" style="display:flex;gap:12px;flex-wrap:wrap;">
+                <input type="text" name="username" placeholder="Instagram username..." required style="flex:1;min-width:200px;" autocomplete="off">
+                <button type="submit" class="btn btn-outline" style="border-color:#00ff9c;color:#00ff9c;">🔍 Profile Info</button>
             </form>
         </div>
     </div>"""
@@ -921,6 +928,11 @@ def scrape_loading_page(user, username, mode='quick'):
         mode_label = 'Stealth Scan'
         mode_color = 'var(--gold)'
         mode_icon = STEALTH_ICON
+    elif mode == 'info':
+        api_url = f"/scrape-profile-info-result?username={urllib.parse.quote(username)}"
+        mode_label = 'Profile Info Scan'
+        mode_color = '#00ff9c'
+        mode_icon = '🔍'
     else:
         api_url = f"/scrape-private-result?username={urllib.parse.quote(username)}"
         mode_label = 'Private Deep Scan'
