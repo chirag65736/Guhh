@@ -64,7 +64,7 @@ def loading_animation():
         bar = "█" * filled + "░" * (bar_len - filled)
         print(f"\r  \033[96m[{bar}] {i:3d}%\033[0m", end="", flush=True)
         time.sleep(0.02)
-    pc.cprint("green \n  [✓] Engine Ready. 100% reset\n")
+    pc.cprint("green \n  [✔] Engine Ready. 100% reset\n")
 
 
 class ProfileResponse:
@@ -169,11 +169,11 @@ def _try_direct(username, proxies):
 def fetch_instagram_profile(username):
     """Fetch Instagram profile using multiple strategies IN PARALLEL for speed."""
     from concurrent.futures import ThreadPoolExecutor, as_completed
-    pc.cprint(f"cyan  [*] Fetching profile → @{username} (parallel mode) reset")
+    pc.cprint(f"cyan  [*] Fetching profile ⟶ @{username} (parallel mode) reset")
     proxies = _get_tor_proxies()
     if proxies:
         proxy_str = proxies.get('https', proxies.get('http', ''))
-        pc.cprint(f"cyan  [*] Using proxy → {proxy_str} reset")
+        pc.cprint(f"cyan  [*] Using proxy ⟶ {proxy_str} reset")
 
     strategies = [
         ("instagrapi", _try_instagrapi),
@@ -192,7 +192,7 @@ def fetch_instagram_profile(username):
             try:
                 result = future.result()
                 if result:
-                    pc.cprint(f"green  [✓] {name} succeeded (first hit) reset")
+                    pc.cprint(f"green  [✔] {name} succeeded (first hit) reset")
                     # Cancel remaining futures
                     for f in futures:
                         f.cancel()
@@ -710,12 +710,12 @@ def generate_gallery_html(post_urls, username):
         <div class="header">
             <div class="brand">Cɪᴘʜᴇʀ</div>
             <div class="brand-sub">Private Access Engine v2.0</div>
-            <div class="target">TARGET → <span>@{username}</span></div>
+            <div class="target">TARGET ⟶ <span>@{username}</span></div>
             <div class="tool-by">◈ Made by Ryon · CipherXPortal ◈</div>
 
             <div class="badges">
-                <span class="badge warn">⚠ Vulnerability Confirmed</span>
-                <span class="badge ok">✓ {total_images} Posts Extracted</span>
+                <span class="badge warn">❗ Vulnerability Confirmed</span>
+                <span class="badge ok">✔ {total_images} Posts Extracted</span>
             </div>
 
             <div class="stats">
@@ -744,7 +744,7 @@ def generate_gallery_html(post_urls, username):
             <div class="brand-mini">Cɪᴘʜᴇʀ</div>
             <div>Instagram Private Post Monitor — POC</div>
             <div class="made">Made by Ryon · Portfolio: CipherXPortal</div>
-            <div class="note">🔒 Serving on localhost:8080 · Full-resolution only · Deduped</div>
+            <div class="note">🔐 Serving on localhost:8080 · Full-resolution only · Deduped</div>
         </div>
     </div>
 
@@ -772,7 +772,7 @@ def generate_gallery_html(post_urls, username):
                              onclick="openLightbox('${{imageUrl}}')">
                     </div>
                     <div class="post-footer">
-                        <a href="${{imageUrl}}" class="download-btn" download="${{postId}}.jpg" target="_blank">⬇ Download HD</a>
+                        <a href="${{imageUrl}}" class="download-btn" download="${{postId}}.jpg" target="_blank">📥 Download HD</a>
                     </div>
                 `;
                 gallery.appendChild(card);
@@ -918,11 +918,11 @@ def generate_unsuccessful_html(username):
     <div class="container">
         <div class="brand">Cɪᴘʜᴇʀ</div>
         <div class="brand-sub">Private Access Engine</div>
-        <div class="target">TARGET → @{username}</div>
+        <div class="target">TARGET ⟶ @{username}</div>
         <div class="made">◈ Made by Ryon · CipherXPortal ◈</div>
 
         <div class="fail">
-            ✕ UNSUCCESSFUL
+            ✖ UNSUCCESSFUL
             <span class="sub">No private posts found · account may be public or unreachable</span>
         </div>
 
@@ -952,9 +952,9 @@ def start_local_server_and_open_chrome(html_content, port=8080, successful=True)
 
     def run_server():
         server = HTTPServer(('localhost', port), GalleryHandler)
-        pc.cprint(f"green  [✓] Server online → http://localhost:{port} reset")
+        pc.cprint(f"green  [✔] Server online ⟶ http://localhost:{port} reset")
         if successful:
-            pc.cprint(f"cyan  [→] Launching browser... reset")
+            pc.cprint(f"cyan  [⟶] Launching browser... reset")
         server.serve_forever()
 
     server_thread = threading.Thread(target=run_server, daemon=True)
@@ -962,7 +962,7 @@ def start_local_server_and_open_chrome(html_content, port=8080, successful=True)
 
     time.sleep(2)
     browser_url = f'http://localhost:{port}'
-    pc.cprint(f"yellow  [!] Opening browser → {browser_url} reset")
+    pc.cprint(f"yellow  [!] Opening browser ⟶ {browser_url} reset")
 
     browser_opened = False
     try:
@@ -970,22 +970,22 @@ def start_local_server_and_open_chrome(html_content, port=8080, successful=True)
             try:
                 pc.link(browser_url)
                 browser_opened = True
-                pc.cprint(f"green  [✓] Browser launched reset")
+                pc.cprint(f"green  [✔] Browser launched reset")
             except:
                 pass
         if not browser_opened:
             pc.link(browser_url)
             browser_opened = True
-            pc.cprint(f"green  [✓] Browser launched reset")
+            pc.cprint(f"green  [✔] Browser launched reset")
     except Exception as e:
         pc.cprint(f"red  [-] Browser error: {e} reset")
 
     if browser_opened:
         pc.cprint(f"green \n  ╔══════════════════════════════════════════════╗ reset")
-        pc.cprint(f"green  ║   ✅  Cɪᴘʜᴇʀ LIVE  ·  {browser_url:<24} ║ reset")
+        pc.cprint(f"green  ║   ☑  Cɪᴘʜᴇʀ LIVE  ·  {browser_url:<24} ║ reset")
         pc.cprint(f"green  ╚══════════════════════════════════════════════╝\n reset")
     else:
-        pc.cprint(f"yellow  [!] Open manually → {browser_url} reset")
+        pc.cprint(f"yellow  [!] Open manually ⟶ {browser_url} reset")
 
     return server_thread, html_filename
 
@@ -1004,14 +1004,14 @@ def save_urls_to_file(image_urls, username, successful=True):
                 f.write(f"URL: {url}\n")
                 f.write("-" * 80 + "\n\n")
 
-        pc.cprint(f"green  [+] Saved {len(image_urls)} URLs → {txt_filename} reset")
+        pc.cprint(f"green  [+] Saved {len(image_urls)} URLs ⟶ {txt_filename} reset")
 
         html_content = generate_gallery_html(image_urls, username)
         html_filename = f'{username}_private_gallery.html'
         with open(html_filename, 'w', encoding='utf-8') as f:
             f.write(html_content)
 
-        pc.cprint(f"green  [+] Gallery written → {html_filename} reset")
+        pc.cprint(f"green  [+] Gallery written ⟶ {html_filename} reset")
     else:
         html_content = generate_unsuccessful_html(username)
         html_filename = f'{username}_private_gallery.html'
@@ -1043,7 +1043,7 @@ def main():
     response = fetch_instagram_profile(username)
 
     if not response:
-        pc.cprint("red \n  ✕ UNSUCCESSFUL reset")
+        pc.cprint("red \n  ✖ UNSUCCESSFUL reset")
         html_content = generate_unsuccessful_html(username)
         save_urls_to_file({}, username, successful=False)
         start_local_server_and_open_chrome(html_content, successful=False)
@@ -1057,7 +1057,7 @@ def main():
     timeline_data = extract_timeline_data(response.text)
 
     if not timeline_data:
-        pc.cprint("red \n  ✕ UNSUCCESSFUL reset")
+        pc.cprint("red \n  ✖ UNSUCCESSFUL reset")
         html_content = generate_unsuccessful_html(username)
         save_urls_to_file({}, username, successful=False)
         start_local_server_and_open_chrome(html_content, successful=False)
@@ -1072,7 +1072,7 @@ def main():
     image_urls = extract_highest_resolution_urls(timeline_data)
 
     if not image_urls:
-        pc.cprint("red \n  ✕ UNSUCCESSFUL reset")
+        pc.cprint("red \n  ✖ UNSUCCESSFUL reset")
         html_content = generate_unsuccessful_html(username)
         save_urls_to_file({}, username, successful=False)
         start_local_server_and_open_chrome(html_content, successful=False)
@@ -1085,25 +1085,25 @@ def main():
 
     print()
     pc.cprint(f"green  ╔══════════════════════════════════════════════╗ reset")
-    pc.cprint(f"green  ║   ✅  SUCCESS — {len(image_urls):>3} posts extracted              ║ reset")
+    pc.cprint(f"green  ║   ☑  SUCCESS — {len(image_urls):>3} posts extracted              ║ reset")
     pc.cprint(f"green  ╚══════════════════════════════════════════════╝ reset")
     print()
 
     html_content = save_urls_to_file(image_urls, username, successful=True)
 
     print()
-    pc.cprint("cyan  [✓] Starting local server... reset")
+    pc.cprint("cyan  [✔] Starting local server... reset")
 
     try:
         server_thread, temp_html = start_local_server_and_open_chrome(html_content, successful=True)
         pc.cprint(f"green \n  ╔══════════════════════════════════════════════╗ reset")
-        pc.cprint(f"green  ║   🟢  http://localhost:8080                    ║ reset")
+        pc.cprint(f"green  ║   💚  http://localhost:8080                    ║ reset")
         pc.cprint(f"green  ╚══════════════════════════════════════════════╝ reset")
         pc.cprint(f"yellow \n  [!] Ctrl+C to stop\n reset")
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
-        pc.cprint("green \n\n  [✓] Server stopped reset")
+        pc.cprint("green \n\n  [✔] Server stopped reset")
         try:
             os.remove('instagram_gallery_temp.html')
         except:

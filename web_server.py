@@ -31,7 +31,7 @@ PORT = 8080
 
 BACK_BUTTON = """
 <div style="position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:9999;">
-  <a href="/dashboard" style="display:inline-flex;align-items:center;gap:8px;padding:14px 30px;background:linear-gradient(135deg,#00e5ff,#ff2bd6);color:#05060a;font-family:'JetBrains Mono',monospace;font-size:.85rem;font-weight:800;letter-spacing:2px;text-transform:uppercase;text-decoration:none;border-radius:12px;box-shadow:0 6px 24px rgba(0,229,255,.35);transition:all .3s;">← Back to Dashboard</a>
+  <a href="/dashboard" style="display:inline-flex;align-items:center;gap:8px;padding:14px 30px;background:linear-gradient(135deg,#00e5ff,#ff2bd6);color:#05060a;font-family:'JetBrains Mono',monospace;font-size:.85rem;font-weight:800;letter-spacing:2px;text-transform:uppercase;text-decoration:none;border-radius:12px;box-shadow:0 6px 24px rgba(0,229,255,.35);transition:all .3s;">⟵ Back to Dashboard</a>
 </div>
 """
 
@@ -540,7 +540,7 @@ class CipherHandler(http.server.BaseHTTPRequestHandler):
                 return
             name = body.get('name', [''])[0].strip()
             details = body.get('details', [''])[0].strip()
-            icon = body.get('icon', ['💳'])[0].strip() or '💳'
+            icon = body.get('icon', ['💰'])[0].strip() or '💰'
             if name and details:
                 db.add_payment_method(name, details, icon)
                 self._redirect(f'/admin?flash=ok:' + urllib.parse.quote(f'Payment method "{name}" added.'))

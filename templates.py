@@ -177,7 +177,7 @@ input[type="text"]:focus, input[type="email"]:focus, input[type="password"]:focu
     font-size: .82rem; color: var(--dim); padding: 5px 0;
     padding-left: 22px; position: relative;
 }
-.plan-card li::before { content: '✓'; position: absolute; left: 0; color: var(--green); font-weight: 700; }
+.plan-card li::before { content: '✔'; position: absolute; left: 0; color: var(--green); font-weight: 700; }
 /* stat cards (admin) */
 .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin-bottom: 28px; }
 .stat-card {
@@ -420,7 +420,7 @@ def nav_bar(user=None):
         if user['is_admin']:
             links += '<a href="/admin">Admin Panel</a>'
             links += '<a href="/analytics">Analytics</a>'
-        links += f'<span class="nav-credits">⚡ {user["credits"]} Credits</span>'
+        links += f'<span class="nav-credits">💠 {user["credits"]} Credits</span>'
         links += '<a href="/logout" class="nav-logout">Logout</a>'
     else:
         links = '<a href="/login">Login</a><a href="/signup">Sign Up</a>'
@@ -450,7 +450,7 @@ def base_page(title, body, user=None, extra_head=""):
     <div class="bg-orbs"><div class="orb"></div><div class="orb"></div><div class="orb"></div></div>
     {nav_bar(user)}
     <div class="page">{body}</div>
-    <div class="made-by">Made with ❤ by <span class="mb-name">ii_silkroad_ii</span> · <a href="/terms" style="color:var(--dim);text-decoration:none;font-style:normal;font-weight:normal;">Terms &amp; Conditions</a></div>
+    <div class="made-by">Made with 💖 by <span class="mb-name">ii_silkroad_ii</span> · <a href="/terms" style="color:var(--dim);text-decoration:none;font-style:normal;font-weight:normal;">Terms &amp; Conditions</a></div>
 </body>
 </html>"""
 
@@ -467,15 +467,15 @@ def landing_page(user=None):
         <p style="font-family:'JetBrains Mono',monospace;font-size:.78rem;color:var(--dim);letter-spacing:6px;text-transform:uppercase;margin-bottom:24px;">Private Access Engine v2.0</p>
         <p style="color:var(--dim);font-size:.95rem;margin-bottom:32px;max-width:420px;margin-left:auto;margin-right:auto;">Extract high-resolution Instagram post images. Pay per username or choose a monthly plan. Premium access, premium results.</p>
         <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap;">
-            <a href="/login" class="btn btn-primary">⚡ Login</a>
+            <a href="/login" class="btn btn-primary">💠 Login</a>
             <a href="/signup" class="btn btn-outline">Sign Up</a>
         </div>
         <div style="margin-top:32px;padding-top:24px;border-top:1px solid var(--line);">
             <div style="display:flex;gap:20px;justify-content:center;flex-wrap:wrap;">
-                <span style="font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--green);letter-spacing:1px;">✓ ₹15 / Post</span>
-                <span style="font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--green);letter-spacing:1px;">✓ Monthly Plans</span>
-                <span style="font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--green);letter-spacing:1px;">✓ Gift Cards</span>
-                <span style="font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--green);letter-spacing:1px;">✓ Invoices</span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--green);letter-spacing:1px;">✔ ₹15 / Post</span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--green);letter-spacing:1px;">✔ Monthly Plans</span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--green);letter-spacing:1px;">✔ Gift Cards</span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--green);letter-spacing:1px;">✔ Invoices</span>
             </div>
         </div>
     </div>"""
@@ -488,7 +488,7 @@ def login_page(error=None):
     flash = f'<div class="flash flash-error">{error}</div>' if error else ''
     body = f"""
     <div class="card" style="max-width:440px;margin:0 auto;">
-        <h2>⚡ Login</h2>
+        <h2>💠 Login</h2>
         {flash}
         <form action="/login" method="post">
             <div class="field"><label>Email</label><input type="email" name="email" required placeholder="you@email.com"></div>
@@ -528,7 +528,7 @@ def signup_page(error=None):
 def terms_page(user=None):
     body = """
     <div class="card" style="max-width:720px;margin:0 auto;">
-        <h2>📜 Terms &amp; Conditions</h2>
+        <h2>📖 Terms &amp; Conditions</h2>
         <div style="color:var(--text);font-size:.88rem;line-height:1.8;">
             <p style="margin-bottom:16px;"><b><i>Welcome to CIPHER.</i></b> By using this website you agree to the following terms and conditions. Please read them carefully.</p>
 
@@ -568,25 +568,25 @@ def welcome_page(user):
     <div class="card" style="max-width:560px;margin:0 auto;text-align:center;">
         <div style="margin:0 auto 20px;width:80px;height:80px;">{LOGO_SVG}</div>
         <h1 style="font-family:'JetBrains Mono',monospace;font-size:2rem;font-weight:800;letter-spacing:4px;background:linear-gradient(90deg,var(--cyan),var(--magenta));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:12px;">Welcome, {user['name']}!</h1>
-        <p style="color:var(--cyan);font-size:.85rem;letter-spacing:3px;text-transform:uppercase;margin-bottom:24px;">Your account is ready ✦</p>
+        <p style="color:var(--cyan);font-size:.85rem;letter-spacing:3px;text-transform:uppercase;margin-bottom:24px;">Your account is ready ✪</p>
 
         <div style="text-align:left;background:rgba(17,22,36,.8);border:1px solid var(--line);border-radius:14px;padding:24px 20px;margin-bottom:24px;">
             <p style="color:var(--text);font-size:.88rem;line-height:1.8;margin-bottom:14px;"><b><i>CIPHER</i></b> is a private access engine for extracting high-resolution Instagram post images. Here's how to get started:</p>
             <div style="display:flex;flex-direction:column;gap:14px;">
                 <div style="display:flex;align-items:flex-start;gap:12px;">
-                    <span style="font-size:1.4rem;">⚡</span>
+                    <span style="font-size:1.4rem;">💠</span>
                     <div><b style="color:var(--cyan);">Quick Scan</b> — 1 credit per scan. Enter any Instagram username to extract their posts.</div>
                 </div>
                 <div style="display:flex;align-items:flex-start;gap:12px;">
-                    <span style="font-size:1.4rem;">🔍</span>
+                    <span style="font-size:1.4rem;">🛰</span>
                     <div><b style="color:var(--magenta);">Deep Scan</b> — 2 credits per scan. Finds more posts using pagination (up to 60).</div>
                 </div>
                 <div style="display:flex;align-items:flex-start;gap:12px;">
-                    <span style="font-size:1.4rem;">💳</span>
+                    <span style="font-size:1.4rem;">💰</span>
                     <div><b style="color:var(--green);">Buy Credits</b> — Pay per post (₹15) or choose a monthly plan. UPI &amp; card accepted.</div>
                 </div>
                 <div style="display:flex;align-items:flex-start;gap:12px;">
-                    <span style="font-size:1.4rem;">🎁</span>
+                    <span style="font-size:1.4rem;">🎟</span>
                     <div><b style="color:var(--gold);">Gift Cards</b> — Redeem codes for free credits.</div>
                 </div>
             </div>
@@ -596,7 +596,7 @@ def welcome_page(user):
             <p style="color:var(--dim);font-size:.78rem;">By continuing, you agree to our <a href="/terms" style="color:var(--cyan);">Terms &amp; Conditions</a>.</p>
         </div>
 
-        <a href="/dashboard" class="btn btn-primary btn-block" style="font-size:.95rem;">🚀 Enter Dashboard</a>
+        <a href="/dashboard" class="btn btn-primary btn-block" style="font-size:.95rem;">🛸 Enter Dashboard</a>
     </div>"""
     return base_page("Cipher · Welcome", body, user)
 
@@ -612,17 +612,17 @@ def dashboard_page(user, flash=None):
     # Scrape form
     scrape_section = f"""
     <div class="card">
-        <h2>⚡ Extract Posts</h2>
+        <h2>💠 Extract Posts</h2>
         <p style="color:var(--dim);font-size:.85rem;margin-bottom:18px;">Enter an Instagram username. <b style="color:var(--green);">1 credit</b> per scrape. You have <b style="color:var(--green);">{user['credits']}</b> credits.</p>
         <form action="/scrape" method="get" style="display:flex;gap:12px;flex-wrap:wrap;">
             <input type="text" name="username" placeholder="Instagram username..." required style="flex:1;min-width:200px;" autocomplete="off">
-            <button type="submit" class="btn btn-primary">⚡ Quick Scan</button>
+            <button type="submit" class="btn btn-primary">💠 Quick Scan</button>
         </form>
         <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--line);">
-            <p style="color:var(--dim);font-size:.78rem;margin-bottom:12px;">🔍 <b style="color:var(--magenta);">Private Deep Scan</b> — finds <b>more posts</b> using pagination (up to 60). <b style="color:var(--magenta);">2 credits</b> per scan. Separate scraper engine.</p>
+            <p style="color:var(--dim);font-size:.78rem;margin-bottom:12px;">🛰 <b style="color:var(--magenta);">Private Deep Scan</b> — finds <b>more posts</b> using pagination (up to 60). <b style="color:var(--magenta);">2 credits</b> per scan. Separate scraper engine.</p>
             <form action="/scrape-private" method="get" style="display:flex;gap:12px;flex-wrap:wrap;">
                 <input type="text" name="username" placeholder="Instagram username..." required style="flex:1;min-width:200px;" autocomplete="off">
-                <button type="submit" class="btn btn-outline" style="border-color:var(--magenta);color:var(--magenta);">🔍 Deep Scan</button>
+                <button type="submit" class="btn btn-outline" style="border-color:var(--magenta);color:var(--magenta);">🛰 Deep Scan</button>
             </form>
         </div>
     </div>"""
@@ -630,7 +630,7 @@ def dashboard_page(user, flash=None):
     # Per-post payment
     per_post = f"""
     <div class="card" style="text-align:center;">
-        <h2>💳 Pay Per Post</h2>
+        <h2>💰 Pay Per Post</h2>
         <p style="color:var(--dim);font-size:.85rem;margin-bottom:18px;">Buy 1 credit for ₹{PER_POST_PRICE}. Use it to extract any profile.</p>
         <a href="/payment?type=per_post" class="btn btn-green">Buy 1 Credit · ₹{PER_POST_PRICE}</a>
     </div>"""
@@ -658,14 +658,14 @@ def dashboard_page(user, flash=None):
 
     plans_section = f"""
     <div class="card">
-        <h2>📅 Monthly Plans</h2>
+        <h2>🗓 Monthly Plans</h2>
         <div class="plans-grid">{plans_html}</div>
     </div>"""
 
     # Gift card
     gift_section = f"""
     <div class="card">
-        <h2>🎁 Gift Card</h2>
+        <h2>🎟 Gift Card</h2>
         <p style="color:var(--dim);font-size:.85rem;margin-bottom:18px;">Have a gift card code? Redeem it for credits.</p>
         <form action="/redeem" method="post" style="display:flex;gap:12px;flex-wrap:wrap;">
             <input type="text" name="code" placeholder="GIFT-XXXXXXXX" required style="flex:1;min-width:200px;">
@@ -690,7 +690,7 @@ def scrape_loading_page(user, username, mode='quick'):
 
     body = f"""
     <div class="card" style="text-align:center;max-width:520px;margin:0 auto;">
-        <h2 style="color:{mode_color};">⚡ {mode_label}</h2>
+        <h2 style="color:{mode_color};">💠 {mode_label}</h2>
         <p style="color:var(--dim);font-size:.85rem;margin-bottom:24px;">Target: <b style="color:{mode_color};">@{username}</b></p>
 
         <!-- Radar scanner animation -->
@@ -731,7 +731,7 @@ def scrape_loading_page(user, username, mode='quick'):
 
         <p style="color:var(--dim);font-size:.78rem;margin-top:20px;" id="loadingMsg">Scanning... please wait</p>
         <p style="color:var(--red);font-size:.78rem;margin-top:12px;display:none;" id="errorMsg"></p>
-        <a href="/dashboard" class="btn btn-outline btn-sm" style="margin-top:16px;display:none;" id="backBtn">← Back to Dashboard</a>
+        <a href="/dashboard" class="btn btn-outline btn-sm" style="margin-top:16px;display:none;" id="backBtn">⟵ Back to Dashboard</a>
     </div>"""
 
     extra = f"""<style>
@@ -778,7 +778,7 @@ def scrape_loading_page(user, username, mode='quick'):
 .scan-step.active {{ color:var(--cyan); }}
 .scan-step.active .step-icon {{ color:var(--cyan);animation:spin 1s linear infinite;display:inline-block; }}
 .scan-step.done {{ color:var(--green); }}
-.scan-step.done .step-icon {{ content:'✓';color:var(--green); }}
+.scan-step.done .step-icon {{ content:'✔';color:var(--green); }}
 .scan-step .step-icon {{ display:inline-block;width:20px;text-align:center; }}
 .post-counter {{
     display:flex;align-items:baseline;justify-content:center;gap:8px;
@@ -808,7 +808,7 @@ def scrape_loading_page(user, username, mode='quick'):
         if (stepIdx > 0) {{
             steps[stepIdx - 1].classList.remove('active');
             steps[stepIdx - 1].classList.add('done');
-            steps[stepIdx - 1].querySelector('.step-icon').textContent = '✓';
+            steps[stepIdx - 1].querySelector('.step-icon').textContent = '✔';
         }}
         if (stepIdx < steps.length) {{
             steps[stepIdx].classList.add('active');
@@ -893,7 +893,7 @@ function copyUpi() {
     navigator.clipboard.writeText('""" + UPI_ID + """').then(function() {
         var btn = document.querySelector('.copy-btn');
         var orig = btn.textContent;
-        btn.textContent = '✓ Copied!';
+        btn.textContent = '✔ Copied!';
         btn.style.color = 'var(--green)';
         btn.style.borderColor = 'rgba(0,255,156,.4)';
         setTimeout(function() { btn.textContent = orig; btn.style.color = ''; btn.style.borderColor = ''; }, 2000);
@@ -988,7 +988,7 @@ def payment_page(user, payment_type, plan_key=None, payment_methods=None):
 
     body = f"""
     <div class="card" style="max-width:480px;margin:0 auto;">
-        <h2>💳 {title_text}</h2>
+        <h2>💰 {title_text}</h2>
         <p style="color:var(--dim);font-size:.85rem;margin-bottom:20px;">{desc}</p>
         <div style="background:rgba(17,22,36,.8);border:1px solid var(--line);border-radius:12px;padding:20px;margin-bottom:24px;">
             <div style="display:flex;justify-content:space-between;margin-bottom:12px;">
@@ -1003,23 +1003,23 @@ def payment_page(user, payment_type, plan_key=None, payment_methods=None):
 
         <!-- UPI Section (Primary) -->
         <div style="background:linear-gradient(135deg,rgba(0,229,255,.08),rgba(124,58,237,.08));border:1px solid rgba(0,229,255,.25);border-radius:16px;padding:28px 22px;margin-bottom:20px;text-align:center;">
-            <div style="font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--cyan);letter-spacing:4px;text-transform:uppercase;margin-bottom:14px;">⚡ Pay via UPI</div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--cyan);letter-spacing:4px;text-transform:uppercase;margin-bottom:14px;">💠 Pay via UPI</div>
             <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
                 <span style="font-family:'JetBrains Mono',monospace;font-size:1.05rem;font-weight:800;color:var(--cyan);letter-spacing:1px;text-shadow:0 0 20px rgba(0,229,255,.4);">{UPI_ID}</span>
-                <button class="copy-btn" onclick="copyUpi()" style="background:rgba(0,229,255,.15);border:1px solid rgba(0,229,255,.4);color:var(--cyan);padding:5px 12px;border-radius:8px;font-family:'JetBrains Mono',monospace;font-size:.7rem;cursor:pointer;transition:all .3s;">📋 Copy</button>
+                <button class="copy-btn" onclick="copyUpi()" style="background:rgba(0,229,255,.15);border:1px solid rgba(0,229,255,.4);color:var(--cyan);padding:5px 12px;border-radius:8px;font-family:'JetBrains Mono',monospace;font-size:.7rem;cursor:pointer;transition:all .3s;">📝 Copy</button>
             </div>
             <div style="position:relative;width:180px;height:180px;margin:0 auto 14px;border-radius:14px;overflow:hidden;border:2px solid rgba(0,229,255,.3);">
                 <img src="{qr_url}" alt="UPI QR Code" style="width:100%;height:100%;">
                 <div style="position:absolute;left:0;right:0;height:3px;background:linear-gradient(90deg,transparent,var(--cyan),transparent);box-shadow:0 0 15px var(--cyan);animation:qrScan 2.5s ease-in-out infinite;"></div>
             </div>
             <p style="color:var(--dim);font-size:.78rem;margin-bottom:16px;">Scan QR or copy UPI ID · Pay <b style="color:var(--green);">₹{amount}</b></p>
-            <button class="btn btn-green btn-block" onclick="showUpload()" style="animation:pulse 2s infinite;">✓ I've Paid — Submit Proof</button>
+            <button class="btn btn-green btn-block" onclick="showUpload()" style="animation:pulse 2s infinite;">✔ I've Paid — Submit Proof</button>
         </div>
 
         <!-- UPI Upload Form (hidden) -->
         <div id="upiUploadForm" style="display:none;margin-bottom:20px;">
             <form id="upiForm" action="/verify-upi" method="post" enctype="multipart/form-data" style="background:rgba(17,22,36,.6);border:1px solid var(--line);border-radius:14px;padding:22px 18px;">
-                <div style="font-family:'JetBrains Mono',monospace;font-size:.82rem;color:var(--cyan);letter-spacing:2px;text-transform:uppercase;margin-bottom:16px;">📤 Submit Payment Proof</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:.82rem;color:var(--cyan);letter-spacing:2px;text-transform:uppercase;margin-bottom:16px;">📩 Submit Payment Proof</div>
                 <input type="hidden" name="payment_type" value="{payment_type}">
                 <input type="hidden" name="plan_key" value="{plan_key or ''}">
                 <input type="hidden" name="amount" value="{amount}">
@@ -1027,7 +1027,7 @@ def payment_page(user, payment_type, plan_key=None, payment_methods=None):
                 <div class="field"><label>Your Name / UPI Sender Name</label><input type="text" name="sender_name" required placeholder="Name shown in UPI app"></div>
                 <div class="field"><label>UTR Number (Transaction Ref)</label><input type="text" name="utr" required placeholder="e.g. 452178963012" maxlength="22"></div>
                 <div class="field"><label>Payment Screenshot</label><input type="file" name="screenshot" accept="image/*" required onchange="previewSS(this)" style="padding:10px;"><img id="ssPreview" style="display:none;max-width:100%;border-radius:10px;margin-top:10px;border:1px solid var(--line);"></div>
-                <button type="submit" class="btn btn-primary btn-block" onclick="return startUpiVerify()">🤖 Submit & AI Verify</button>
+                <button type="submit" class="btn btn-primary btn-block" onclick="return startUpiVerify()">🧠 Submit & AI Verify</button>
             </form>
         </div>
 
@@ -1079,10 +1079,10 @@ def payment_page(user, payment_type, plan_key=None, payment_methods=None):
             <div class="verify-check" id="verifyCheck" style="display:none;width:80px;height:80px;margin:20px auto;border-radius:50%;background:rgba(0,255,156,.15);border:3px solid var(--green);align-items:center;justify-content:center;">
                 <svg viewBox="0 0 52 52" style="width:40px;height:40px;"><path class="check-path" d="M14 27 L22 35 L38 17" style="stroke:var(--green);stroke-width:4;fill:none;stroke-dasharray:50;stroke-dashoffset:50;animation:drawCheck .5s ease .2s forwards;"/></svg>
             </div>
-            <div class="verify-step" style="font-family:'JetBrains Mono',monospace;font-size:.85rem;letter-spacing:2px;color:var(--cyan);margin-top:16px;opacity:0;transition:opacity .3s;">🔍 Scanning Screenshot...</div>
-            <div class="verify-step" style="font-family:'JetBrains Mono',monospace;font-size:.85rem;letter-spacing:2px;color:var(--cyan);margin-top:16px;opacity:0;transition:opacity .3s;">📋 Extracting UTR Number...</div>
-            <div class="verify-step" style="font-family:'JetBrains Mono',monospace;font-size:.85rem;letter-spacing:2px;color:var(--cyan);margin-top:16px;opacity:0;transition:opacity .3s;">✓ Verifying Transaction...</div>
-            <div class="verify-step" style="font-family:'JetBrains Mono',monospace;font-size:.85rem;letter-spacing:2px;color:var(--cyan);margin-top:16px;opacity:0;transition:opacity .3s;">✅ AI Verification Complete!</div>
+            <div class="verify-step" style="font-family:'JetBrains Mono',monospace;font-size:.85rem;letter-spacing:2px;color:var(--cyan);margin-top:16px;opacity:0;transition:opacity .3s;">🛰 Scanning Screenshot...</div>
+            <div class="verify-step" style="font-family:'JetBrains Mono',monospace;font-size:.85rem;letter-spacing:2px;color:var(--cyan);margin-top:16px;opacity:0;transition:opacity .3s;">📝 Extracting UTR Number...</div>
+            <div class="verify-step" style="font-family:'JetBrains Mono',monospace;font-size:.85rem;letter-spacing:2px;color:var(--cyan);margin-top:16px;opacity:0;transition:opacity .3s;">✔ Verifying Transaction...</div>
+            <div class="verify-step" style="font-family:'JetBrains Mono',monospace;font-size:.85rem;letter-spacing:2px;color:var(--cyan);margin-top:16px;opacity:0;transition:opacity .3s;">☑ AI Verification Complete!</div>
         </div>
     </div>"""
 
@@ -1120,7 +1120,7 @@ def invoice_page(user, invoice):
                 <div>{date_str}</div>
             </div>
         </div>
-        <span class="invoice-paid">✓ PAID</span>
+        <span class="invoice-paid">✔ PAID</span>
         <div class="invoice-section">
             <div class="label">Bill To</div>
             <div class="value">{invoice['user_name'] or invoice['email']}</div>
@@ -1140,7 +1140,7 @@ def invoice_page(user, invoice):
             <div class="sign-title">CIPHER · ADMIN</div>
         </div>
         <div style="text-align:center;margin-top:28px;">
-            <button onclick="window.print()" class="btn btn-outline btn-sm">🖨 Print / Save PDF</button>
+            <button onclick="window.print()" class="btn btn-outline btn-sm">📄 Print / Save PDF</button>
             <a href="/dashboard" class="btn btn-outline btn-sm" style="margin-left:8px;">Back to Dashboard</a>
         </div>
     </div>"""
@@ -1167,7 +1167,7 @@ def admin_page(user, stats, users, payments, gift_cards, invoices, payment_metho
     # Gift card creation
     gift_create = f"""
     <div class="card">
-        <h2>🎁 Create Gift Card</h2>
+        <h2>🎟 Create Gift Card</h2>
         {flash_html}
         <form action="/admin/create-giftcard" method="post" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
             <div class="field" style="flex:1;min-width:160px;margin-bottom:0;">
@@ -1183,11 +1183,11 @@ def admin_page(user, stats, users, payments, gift_cards, invoices, payment_metho
     for up in upi_payments:
         ai = up['ai_recommendation']
         if ai == 'verified':
-            ai_badge = f'<span style="color:var(--green);font-weight:700;">✓ Verified ({up["ai_confidence"]}%)</span>'
+            ai_badge = f'<span style="color:var(--green);font-weight:700;">✔ Verified ({up["ai_confidence"]}%)</span>'
         elif ai == 'suspicious':
-            ai_badge = f'<span style="color:var(--gold);font-weight:700;">⚠ Suspicious ({up["ai_confidence"]}%)</span>'
+            ai_badge = f'<span style="color:var(--gold);font-weight:700;">❗ Suspicious ({up["ai_confidence"]}%)</span>'
         elif ai == 'rejected':
-            ai_badge = f'<span style="color:var(--red);font-weight:700;">✕ Rejected</span>'
+            ai_badge = f'<span style="color:var(--red);font-weight:700;">✖ Rejected</span>'
         else:
             ai_badge = '<span style="color:var(--dim);">Manual review</span>'
 
@@ -1196,11 +1196,11 @@ def admin_page(user, stats, users, payments, gift_cards, invoices, payment_metho
             actions = f"""
                 <form action="/admin/verify-upi" method="post" style="display:inline;">
                     <input type="hidden" name="payment_id" value="{up['id']}">
-                    <button type="submit" class="btn btn-sm btn-green" style="padding:6px 12px;font-size:.68rem;">✓ Approve</button>
+                    <button type="submit" class="btn btn-sm btn-green" style="padding:6px 12px;font-size:.68rem;">✔ Approve</button>
                 </form>
                 <form action="/admin/reject-upi" method="post" style="display:inline;margin-left:4px;">
                     <input type="hidden" name="payment_id" value="{up['id']}">
-                    <button type="submit" class="btn btn-sm" style="padding:6px 12px;font-size:.68rem;background:rgba(255,56,96,.15);color:var(--red);border:1px solid rgba(255,56,96,.3);">✕ Reject</button>
+                    <button type="submit" class="btn btn-sm" style="padding:6px 12px;font-size:.68rem;background:rgba(255,56,96,.15);color:var(--red);border:1px solid rgba(255,56,96,.3);">✖ Reject</button>
                 </form>"""
         elif up['status'] == 'verified':
             status_badge = '<span class="tag tag-active">Verified</span>'
@@ -1209,7 +1209,7 @@ def admin_page(user, stats, users, payments, gift_cards, invoices, payment_metho
             status_badge = '<span class="tag tag-redeemed">Rejected</span>'
             actions = ''
 
-        ss_link = f'<a href="/screenshot?name={up["screenshot_path"]}" target="_blank" style="color:var(--cyan);">📷 View</a>' if up['screenshot_path'] else '—'
+        ss_link = f'<a href="/screenshot?name={up["screenshot_path"]}" target="_blank" style="color:var(--cyan);">📸 View</a>' if up['screenshot_path'] else '—'
         ai_reason = f'<br><span style="font-size:.68rem;color:var(--dim);">{up["ai_reason"][:60]}</span>' if up['ai_reason'] else ''
 
         upi_rows += f"""<tr>
@@ -1224,7 +1224,7 @@ def admin_page(user, stats, users, payments, gift_cards, invoices, payment_metho
 
     upi_section = f"""
     <div class="card">
-        <h2>🤖 UPI Payment Verifications</h2>
+        <h2>🧠 UPI Payment Verifications</h2>
         <p style="color:var(--dim);font-size:.82rem;margin-bottom:18px;">AI analyzes each screenshot and suggests approve/reject. Admin makes the final call.</p>
         <div class="table-wrap"><table>
             <thead><tr><th>User / Sender</th><th>Amount</th><th>UTR</th><th>SS</th><th>AI Analysis</th><th>Status</th><th>Action</th></tr></thead>
@@ -1239,7 +1239,7 @@ def admin_page(user, stats, users, payments, gift_cards, invoices, payment_metho
 
     add_credits = f"""
     <div class="card">
-        <h2>⚡ Add Credits to User</h2>
+        <h2>💠 Add Credits to User</h2>
         <form action="/admin/add-credits" method="post" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
             <div class="field" style="flex:2;min-width:200px;margin-bottom:0;">
                 <label>Select User</label>
@@ -1272,12 +1272,12 @@ def admin_page(user, stats, users, payments, gift_cards, invoices, payment_metho
 
     payment_methods_section = f"""
     <div class="card">
-        <h2>💳 Payment Methods</h2>
+        <h2>💰 Payment Methods</h2>
         <p style="color:var(--dim);font-size:.82rem;margin-bottom:18px;">Add any payment method you want — UPI, bank transfer, crypto, etc. Users will see these on the payment page.</p>
         <form action="/admin/add-payment-method" method="post" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:20px;">
             <div class="field" style="flex:1;min-width:100px;margin-bottom:0;">
                 <label>Icon</label>
-                <input type="text" name="icon" placeholder="💳" maxlength="4" value="💳" style="text-align:center;">
+                <input type="text" name="icon" placeholder="💰" maxlength="4" value="💰" style="text-align:center;">
             </div>
             <div class="field" style="flex:2;min-width:140px;margin-bottom:0;">
                 <label>Method Name</label>
@@ -1303,7 +1303,7 @@ def admin_page(user, stats, users, payments, gift_cards, invoices, payment_metho
 
     gift_table = f"""
     <div class="card">
-        <h2>🎁 Gift Cards</h2>
+        <h2>🎟 Gift Cards</h2>
         <div class="table-wrap"><table>
             <thead><tr><th>Code</th><th>Credits</th><th>Status</th><th>Created</th></tr></thead>
             <tbody>{cards_rows if cards_rows else '<tr><td colspan="4" style="text-align:center;color:var(--dim);">No gift cards yet</td></tr>'}</tbody>
@@ -1318,7 +1318,7 @@ def admin_page(user, stats, users, payments, gift_cards, invoices, payment_metho
 
     users_table = f"""
     <div class="card">
-        <h2>👥 Users</h2>
+        <h2>🧑‍💼 Users</h2>
         <div class="table-wrap"><table>
             <thead><tr><th>Name</th><th>Email</th><th>Credits</th><th>Role</th><th>Joined</th></tr></thead>
             <tbody>{users_rows}</tbody>
@@ -1332,7 +1332,7 @@ def admin_page(user, stats, users, payments, gift_cards, invoices, payment_metho
 
     pay_table = f"""
     <div class="card">
-        <h2>💳 Payments</h2>
+        <h2>💰 Payments</h2>
         <div class="table-wrap"><table>
             <thead><tr><th>User</th><th>Amount</th><th>Type</th><th>Credits</th><th>Date</th></tr></thead>
             <tbody>{pay_rows if pay_rows else '<tr><td colspan="5" style="text-align:center;color:var(--dim);">No payments yet</td></tr>'}</tbody>
@@ -1346,7 +1346,7 @@ def admin_page(user, stats, users, payments, gift_cards, invoices, payment_metho
 
     inv_table = f"""
     <div class="card">
-        <h2>🧾 Invoices</h2>
+        <h2>📑 Invoices</h2>
         <div class="table-wrap"><table>
             <thead><tr><th>Invoice #</th><th>User</th><th>Amount</th><th>Date</th></tr></thead>
             <tbody>{inv_rows if inv_rows else '<tr><td colspan="4" style="text-align:center;color:var(--dim);">No invoices yet</td></tr>'}</tbody>
@@ -1382,7 +1382,7 @@ def analytics_page(user, summary, rows):
 
     table_html = f"""
     <div class="card">
-        <h2>📊 Per-User Activity</h2>
+        <h2>📈 Per-User Activity</h2>
         <div class="table-wrap"><table>
             <thead><tr><th>User</th><th>Email</th><th>Searches</th><th>Downloads</th><th>Total</th></tr></thead>
             <tbody>{user_rows_html if user_rows_html else '<tr><td colspan="5" style="text-align:center;color:var(--dim);">No activity recorded yet</td></tr>'}</tbody>
