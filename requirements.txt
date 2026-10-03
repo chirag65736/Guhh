@@ -7,3 +7,4 @@ PySocks
 instagrapi
 curl_cffi
 instaloader
+playwright

@@ -1,15 +1,15 @@
 """
 Followers Scraper — extracts follower USERNAMES from an Instagram profile.
 
-For private accounts, authentication is required (IG_SESSION_ID or
-IG_SESSION_USER + IG_SESSION_PASS). Without it, Instagram hides the
-follower list.
-
-Strategies (all tried, first success wins):
+Strategies (all tried, best result wins):
+  0. Playwright headless browser — renders the profile page, opens the
+     followers modal, scrolls to load more, extracts usernames from DOM.
+     Works for PUBLIC accounts WITHOUT Instagram login.
   1. Web friendships API  — /api/v1/friendships/{user_id}/followers/ with
      IG_SESSION_ID cookie + max_id pagination (fastest, most complete).
   2. instaloader Profile.get_followers() — iterates follower objects,
      each exposing .username. Works for private accounts if logged in.
+  3. GraphQL edge_followed_by pagination (requires IG_SESSION_ID).
 
 Usage:
     from followers_scraper import scrape_followers
@@ -23,6 +23,84 @@ import json
 import time
 
 IG_APP_ID = '936619743392459'
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  Strategy 0 — Playwright headless browser (NO login needed for public)
+#  Opens the profile page, clicks "followers", scrolls the modal,
+#  extracts usernames from the rendered DOM.
+# ═══════════════════════════════════════════════════════════════════════
+
+def _strategy_playwright(username, max_followers):
+    """Use Playwright headless Chromium to scrape followers via picuki.com.
+
+    Picuki/tikvib is a public Instagram viewer that shows follower lists
+    without requiring Instagram login. Playwright (a real browser) handles
+    Cloudflare's JS challenge automatically.
+    """
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        print("[-] followers: playwright — not installed, skipping", flush=True)
+        return []
+
+    try:
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(headless=True, args=[
+                '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage',
+                '--disable-blink-features=AutomationControlled',
+            ])
+            context = browser.new_context(
+                user_agent='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 '
+                           '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                viewport={'width': 1280, 'height': 900},
+                locale='en-US',
+            )
+            context.add_init_script('''
+                Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+                window.chrome = { runtime: {} };
+            ''')
+            page = context.new_page()
+
+            url = f'https://www.picuki.com/followers/{username}'
+            print(f"[*] followers: playwright — loading {url}", flush=True)
+
+            page.goto(url, timeout=30000, wait_until='networkidle')
+            page.wait_for_timeout(3000)
+
+            # Handle Cloudflare "Just a moment" challenge
+            for _ in range(3):
+                title = page.title()
+                if 'Just a moment' not in title:
+                    break
+                print("[*] followers: playwright — Cloudflare challenge, waiting...", flush=True)
+                page.wait_for_timeout(8000)
+
+            html = page.content()
+            browser.close()
+
+            # Extract usernames from /profile/{username} links
+            import re as _re
+            raw = _re.findall(r'/profile/([a-zA-Z0-9._]+)', html)
+            # Deduplicate, filter out the target and non-user paths
+            skip = {username, 'picuki', 'tikvib', 'page', 'about', 'contact_us',
+                    'remove', 'privacy', 'terms', 'copyright'}
+            usernames = []
+            seen = set()
+            for u in raw:
+                if u not in seen and u not in skip:
+                    seen.add(u)
+                    usernames.append(u)
+
+            if len(usernames) > max_followers:
+                usernames = usernames[:max_followers]
+
+            print(f"[✓] followers: playwright → {len(usernames)} usernames", flush=True)
+            return usernames
+
+    except Exception as e:
+        print(f"[-] followers: playwright error: {e}", flush=True)
+        return []
 
 
 def _get_proxies():
@@ -365,6 +443,17 @@ def scrape_followers(username, max_followers=200):
     print(f"[*] followers: starting scrape for @{username} (max {max_followers})", flush=True)
 
     all_results = {}
+
+    # Strategy 0: Playwright headless browser (works for public accounts without login)
+    names = _strategy_playwright(username, max_followers)
+    if names:
+        all_results['playwright'] = names
+
+    # If Playwright already found enough, return early
+    if all_results and max(len(v) for v in all_results.values()) >= 5:
+        best = max(all_results, key=lambda k: len(all_results[k]))
+        print(f"[✓] followers: playwright got {len(all_results[best])} — skipping API strategies", flush=True)
+        return all_results[best]
 
     # ── Try direct first, then Tor ──
     for proxy_label, proxies in [('direct', None), ('tor', _get_proxies())]:

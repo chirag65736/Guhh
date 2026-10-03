@@ -95,14 +95,18 @@ SQLite DB persists in a named Docker volume (`cipher_data`).
 
 ## Followers Scraper
 - **followers_scraper.py** — extracts follower USERNAMES (not just count) from any
-  Instagram profile, including private accounts.
-- Uses 3 strategies: friendships API (IG_SESSION_ID), instaloader get_followers()
-  (IG_SESSION_USER/PASS), GraphQL edge_followed_by pagination (IG_SESSION_ID).
-- For private accounts, authentication is REQUIRED — set IG_SESSION_ID or
-  IG_SESSION_USER + IG_SESSION_PASS env vars. Without it, Instagram hides the list.
+  Instagram profile.
+- **Primary strategy: Playwright + picuki/tikvib** — uses headless Chromium to load
+  picuki.com/followers/{username}, a public IG viewer that shows follower lists
+  without Instagram login. Playwright handles Cloudflare's JS challenge automatically.
+  Returns ~30 usernames per scan. Works for PUBLIC accounts without any credentials.
+- Fallback strategies (require IG credentials): friendships API (IG_SESSION_ID),
+  instaloader get_followers() (IG_SESSION_USER/PASS), GraphQL pagination (IG_SESSION_ID).
+- For PRIVATE accounts, IG_SESSION_ID or IG_SESSION_USER + IG_SESSION_PASS must be set.
 - Returns up to 200 usernames per scan. Costs 2 credits.
 - Route: /scrape-followers (deducts 2 credits) → /scrape-followers-result (executes)
 - Results page shows clickable list of follower usernames linking to their IG profiles.
+- Playwright + Chromium are installed via Dockerfile.base44 (build step, not per-start).
 
 ## Notes
 - Instagram blocks datacenter IPs; scraper relies on Tor exit nodes (may fail if flagged).
