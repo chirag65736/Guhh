@@ -75,6 +75,106 @@ def _clean_url(url):
 
 
 # ═══════════════════════════════════════════════════════════════════════
+#  Strategy 0 — Profile page Relay data extraction (FASTEST)
+#  Fetches the logged-out profile page HTML through Tor and extracts
+#  post image URLs from embedded Relay/GraphQL data in <script data-sjs>
+#  tags. The 'polaris_ordered_timeline_connection' field contains the
+#  first page of posts with display_uri (image URLs).
+#  This is the fastest strategy — single HTTP request, no API calls.
+# ═══════════════════════════════════════════════════════════════════════
+
+def _strategy_profile_page(username, proxies, max_posts):
+    """Extract image URLs from profile page embedded Relay data."""
+    from curl_cffi import requests as cffi_req
+
+    try:
+        session = cffi_req.Session()
+        session.get('https://www.instagram.com/', impersonate='chrome',
+                     proxies=proxies, timeout=12)
+
+        r = session.get(
+            f'https://www.instagram.com/{username}/',
+            impersonate='chrome',
+            proxies=proxies,
+            timeout=12,
+        )
+        if r.status_code != 200 or '/accounts/login/' in r.url:
+            print(f"[-] stealth: profile_page → {r.status_code} (login redirect)", flush=True)
+            return {}
+
+        page = r.text
+        sjs_scripts = re.findall(r'data-sjs[^>]*>(.*?)</script>', page, re.DOTALL)
+
+        urls = {}
+        for script in sjs_scripts:
+            if 'polaris_ordered_timeline_connection' not in script:
+                continue
+
+            # Try JSON parse first
+            try:
+                data = json.loads(script)
+            except Exception:
+                # Regex fallback: extract display_uri + code + username
+                node_pattern = re.compile(
+                    r'"display_uri"\s*:\s*"([^"]+)"[^}]*?"media_type"\s*:\s*(\d+)[^}]*?"username"\s*:\s*"([^"]+)"',
+                    re.DOTALL,
+                )
+                for m in node_pattern.finditer(script):
+                    uri, media_type, owner = m.group(1), int(m.group(2)), m.group(3)
+                    if owner != username:
+                        continue
+                    cleaned = _clean_url(uri)
+                    if cleaned:
+                        key = f"pp_{len(urls)}_{_secrets.token_hex(3)}"
+                        urls[key] = cleaned
+                continue
+
+            # Navigate JSON to find edges
+            def _find_edges(obj):
+                results = []
+                if isinstance(obj, dict):
+                    if 'edges' in obj and isinstance(obj['edges'], list):
+                        results.extend(obj['edges'])
+                    for v in obj.values():
+                        results.extend(_find_edges(v))
+                elif isinstance(obj, list):
+                    for item in obj:
+                        results.extend(_find_edges(item))
+                return results
+
+            edges = _find_edges(data)
+            for edge in edges:
+                if not isinstance(edge, dict):
+                    continue
+                node = edge.get('node', edge)
+                if not isinstance(node, dict):
+                    continue
+                owner = node.get('user', {}).get('username', '') if isinstance(node.get('user'), dict) else ''
+                if owner != username:
+                    continue
+                uri = node.get('display_uri', '')
+                code = node.get('code', '') or node.get('pk', '')
+                if uri:
+                    cleaned = _clean_url(uri)
+                    if cleaned:
+                        key = code if code else f"pp_{len(urls)}_{_secrets.token_hex(3)}"
+                        urls[key] = cleaned
+
+            if urls:
+                break
+
+        if len(urls) > max_posts:
+            urls = dict(list(urls.items())[:max_posts])
+
+        print(f"[✓] stealth: profile_page → {len(urls)} image URLs", flush=True)
+        return urls
+
+    except Exception as e:
+        print(f"[-] stealth: profile_page error: {e}", flush=True)
+        return {}
+
+
+# ═══════════════════════════════════════════════════════════════════════
 #  Strategy 1 — obitouka/InstagramPrivSniffer approach
 #  curl_cffi Chrome impersonation + regex post-code extraction
 #  from profile HTML + GraphQL media fetch for each post
@@ -971,6 +1071,12 @@ def scrape_stealth_profile(username, max_posts=60):
     # Each task is (name, callable) — callable takes no args
     tasks = []
 
+    # Profile page strategy — FASTEST, single HTTP request through Tor
+    # Try Tor first (direct usually gets 429), then direct as fallback
+    if proxies_tor:
+        tasks.append(('profile_page/tor', lambda: _strategy_profile_page(username, proxies_tor, max_posts)))
+    tasks.append(('profile_page/direct', lambda: _strategy_profile_page(username, proxies_direct, max_posts)))
+
     # curl_cffi strategies — try direct first (fast), Tor as fallback
     for proxy_label, proxies in [('direct', proxies_direct), ('tor', proxies_tor)]:
         if proxies is None and proxy_label == 'tor':
@@ -982,15 +1088,23 @@ def scrape_stealth_profile(username, max_posts=60):
         tasks.append((f'drawrowfly{tag}', lambda p=proxies: _strategy_drawrowfly(username, p, max_posts)))
 
     # session_api only needs to run once (uses IG_SESSION_ID cookie, not proxy-dependent)
-    tasks.append(('session_api', lambda: _strategy_session_api(username, proxies_direct, max_posts)))
+    ig_session_id = os.environ.get('IG_SESSION_ID', '')
+    if ig_session_id:
+        tasks.append(('session_api', lambda: _strategy_session_api(username, proxies_direct, max_posts)))
 
-    # instagrapi and instaloader use their own connections (no proxy param)
-    tasks.append(('instagrapi', lambda: _strategy_instagrapi(username, max_posts)))
-    tasks.append(('instaloader', lambda: _strategy_instaloader(username, max_posts)))
+    # instagrapi/instaloader — only if credentials are configured
+    ig_user = os.environ.get('IG_SESSION_USER', '')
+    if ig_user:
+        tasks.append(('instagrapi', lambda: _strategy_instagrapi(username, max_posts)))
+        tasks.append(('instaloader', lambda: _strategy_instaloader(username, max_posts)))
 
     print(f"[*] stealth: launching {len(tasks)} strategies in parallel", flush=True)
 
-    # ── Run all strategies concurrently ──
+    # ── Run all strategies concurrently with early exit ──
+    # If any strategy returns >= 10 posts, we cancel remaining futures
+    # and return immediately — no need to wait for slow strategies.
+    EARLY_EXIT_THRESHOLD = 10
+
     with ThreadPoolExecutor(max_workers=len(tasks)) as executor:
         future_map = {}
         for name, fn in tasks:
@@ -1006,6 +1120,13 @@ def scrape_stealth_profile(username, max_posts=60):
             if urls:
                 all_results[name] = urls
                 print(f"[+] stealth: {name} → {len(urls)} posts (parallel)", flush=True)
+
+                # Early exit: if we have enough posts, cancel remaining futures
+                if len(urls) >= EARLY_EXIT_THRESHOLD:
+                    print(f"[*] stealth: early exit — {name} returned {len(urls)} posts (>= {EARLY_EXIT_THRESHOLD})", flush=True)
+                    for f in future_map:
+                        f.cancel()
+                    break
 
     if not all_results:
         print(f"[-] stealth: all strategies failed for @{username}", flush=True)

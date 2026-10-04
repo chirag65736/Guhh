@@ -130,6 +130,134 @@ def _get_shortcodes(username, proxies):
         return [], None, ''
 
 
+def _get_shortcodes_from_profile_page(username, proxies):
+    """
+    Get post shortcodes by scraping the profile page HTML.
+
+    Instagram's logged-out profile page embeds Relay/GraphQL data in
+    <script data-sjs> tags. The 'polaris_ordered_timeline_connection'
+    field contains the first page of posts with codes and media types.
+
+    This approach works through Tor even when the web_profile_info API
+    returns 401, because the profile page itself is served to logged-out
+    users (unlike the API which requires authentication).
+
+    Returns: (shortcodes_list, session, csrftoken)
+    shortcodes_list is ordered: video posts first, then others.
+    """
+    from curl_cffi import requests as cffi_req
+
+    try:
+        session = cffi_req.Session()
+        # Get cookies from home page
+        session.get('https://www.instagram.com/', impersonate='chrome',
+                     proxies=proxies, timeout=15)
+        csrftoken = session.cookies.get('csrftoken', '')
+
+        # Fetch profile page
+        r = session.get(
+            f'https://www.instagram.com/{username}/',
+            impersonate='chrome',
+            proxies=proxies,
+            timeout=15,
+        )
+        if r.status_code != 200:
+            print(f"[-] private_videos: profile page → {r.status_code}", flush=True)
+            return [], session, csrftoken
+
+        # Check for login redirect
+        if '/accounts/login/' in r.url:
+            print("[-] private_videos: profile page redirected to login", flush=True)
+            return [], session, csrftoken
+
+        page = r.text
+
+        # Extract data-sjs scripts and find polaris_ordered_timeline_connection
+        sjs_scripts = re.findall(r'data-sjs[^>]*>(.*?)</script>', page, re.DOTALL)
+
+        video_codes = []
+        other_codes = []
+
+        for script in sjs_scripts:
+            if 'polaris_ordered_timeline_connection' not in script:
+                continue
+
+            # Try to parse as JSON
+            try:
+                data = json.loads(script)
+            except Exception:
+                # Fall back to regex extraction of codes and media types
+                # Pattern: "code":"XXXXX" ... "media_type":N ... "username":"YYY"
+                # Extract all nodes with code + media_type + username
+                node_pattern = re.compile(
+                    r'"code"\s*:\s*"([^"]{5,})"[^}]*?"media_type"\s*:\s*(\d+)[^}]*?"username"\s*:\s*"([^"]+)"',
+                    re.DOTALL,
+                )
+                for m in node_pattern.finditer(script):
+                    code, media_type, owner = m.group(1), int(m.group(2)), m.group(3)
+                    if owner != username:
+                        continue
+                    if media_type == 2:
+                        video_codes.append(code)
+                    else:
+                        other_codes.append(code)
+                continue
+
+            # Navigate the JSON structure to find edges
+            def _find_edges(obj):
+                """Recursively find 'edges' lists in the JSON."""
+                results = []
+                if isinstance(obj, dict):
+                    if 'edges' in obj and isinstance(obj['edges'], list):
+                        results.extend(obj['edges'])
+                    for v in obj.values():
+                        results.extend(_find_edges(v))
+                elif isinstance(obj, list):
+                    for item in obj:
+                        results.extend(_find_edges(item))
+                return results
+
+            edges = _find_edges(data)
+            for edge in edges:
+                if not isinstance(edge, dict):
+                    continue
+                node = edge.get('node', edge)
+                if not isinstance(node, dict):
+                    continue
+                code = node.get('code', '')
+                media_type = node.get('media_type', 0)
+                user_info = node.get('user', {})
+                owner = user_info.get('username', '') if isinstance(user_info, dict) else ''
+
+                if not code or owner != username:
+                    continue
+
+                if media_type == 2:
+                    video_codes.append(code)
+                else:
+                    other_codes.append(code)
+
+        # Deduplicate while preserving order
+        seen = set()
+        ordered = []
+        for code in video_codes + other_codes:
+            if code not in seen:
+                seen.add(code)
+                ordered.append(code)
+
+        if ordered:
+            print(f"[*] private_videos: profile page → {len(video_codes)} video posts, "
+                  f"{len(other_codes)} other posts (via embedded Relay data)", flush=True)
+        else:
+            print("[-] private_videos: profile page — no posts found in Relay data", flush=True)
+
+        return ordered, session, csrftoken
+
+    except Exception as e:
+        print(f"[-] private_videos: profile page error: {e}", flush=True)
+        return [], None, ''
+
+
 def _fetch_post_video_graphql(shortcode, session, csrftoken, proxies):
     """Fetch video URLs for a single post via GraphQL query.
 
@@ -298,26 +426,33 @@ def scrape_private_videos(username, max_posts=30, shortcodes=None):
         print(f"[*] private_videos: using {len(shortcodes)} pre-fetched shortcodes", flush=True)
         from curl_cffi import requests as cffi_req
         try:
+            proxies = _get_proxies()
             session = cffi_req.Session()
-            session.get('https://www.instagram.com/', impersonate='chrome', timeout=15)
+            session.get('https://www.instagram.com/', impersonate='chrome',
+                         proxies=proxies, timeout=15)
             csrftoken = session.cookies.get('csrftoken', '')
         except Exception:
             session = None
     else:
-        # Fetch shortcodes from web_profile_info API
-        for proxy_label, proxies in [('direct', None), ('tor', _get_proxies())]:
+        # Strategy 1: Profile page HTML (works through Tor, most reliable)
+        for proxy_label, proxies in [('tor', _get_proxies()), ('direct', None)]:
             if proxies is None and proxy_label == 'tor':
                 continue
 
-            print(f"[*] private_videos: trying {proxy_label} for shortcodes", flush=True)
-            shortcodes, session, csrftoken = _get_shortcodes(username, proxies)
-
+            print(f"[*] private_videos: trying {proxy_label} profile page for shortcodes", flush=True)
+            shortcodes, session, csrftoken = _get_shortcodes_from_profile_page(username, proxies)
             if shortcodes:
                 break
 
-            if proxy_label == 'direct':
-                print("[*] private_videos: direct failed, trying Tor...", flush=True)
-                time.sleep(1)
+            # Strategy 2: web_profile_info API (fallback)
+            print(f"[*] private_videos: trying {proxy_label} web_profile_info for shortcodes", flush=True)
+            shortcodes, session, csrftoken = _get_shortcodes(username, proxies)
+            if shortcodes:
+                break
+
+            if proxy_label == 'tor':
+                print("[*] private_videos: Tor failed, trying direct...", flush=True)
+                time.sleep(0.5)
 
     if not shortcodes:
         print(f"[-] private_videos: could not get shortcodes for @{username}", flush=True)
