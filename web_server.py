@@ -218,12 +218,15 @@ from followers_scraper import scrape_followers
 from post_engagement_scraper import scrape_post_engagement
 from private_posts_scraper import scrape_private_posts
 from private_videos_scraper import scrape_private_videos
+from full_scan import run_full_scan
+from html import escape
 
 
-def _generate_combined_html(username, image_urls, profile_info, follower_usernames, post_engagement=None, all_post_urls=None, video_urls=None):
+def _generate_combined_html(username, image_urls, profile_info, follower_usernames, post_engagement=None, all_post_urls=None, video_urls=None, notices=None):
     """Generate a single page showing ALL scan results: stealth gallery,
     profile info, followers list, post engagement (likes/comments), and
     all private post images — combined into one page."""
+    notices_html = ''.join(f'<div>{escape(message)}</div>' for message in (notices or []))
     # ── Profile Info section ──
     info_html = ''
     if profile_info:
@@ -253,9 +256,9 @@ def _generate_combined_html(username, image_urls, profile_info, follower_usernam
                 </div>
                 {bio_html}
                 <div class="mini-stats">
-                    <div class="mini-stat"><span class="mini-num">{followers:,}</span><span class="mini-lbl">Followers</span></div>
-                    <div class="mini-stat"><span class="mini-num">{following:,}</span><span class="mini-lbl">Following</span></div>
-                    <div class="mini-stat"><span class="mini-num">{posts:,}</span><span class="mini-lbl">Posts</span></div>
+                    <div class="mini-stat"><span class="mini-num">{followers if not isinstance(followers, (int, float)) else format(followers, ',')}</span><span class="mini-lbl">Followers</span></div>
+                    <div class="mini-stat"><span class="mini-num">{following if not isinstance(following, (int, float)) else format(following, ',')}</span><span class="mini-lbl">Following</span></div>
+                    <div class="mini-stat"><span class="mini-num">{posts if not isinstance(posts, (int, float)) else format(posts, ',')}</span><span class="mini-lbl">Posts</span></div>
                 </div>
             </div>
         </div>"""
@@ -623,6 +626,8 @@ def _generate_combined_html(username, image_urls, profile_info, follower_usernam
                 </div>
             </div>
         </div>
+
+        <div role="status" style="color:var(--dim);font-size:.82rem;line-height:1.6;margin-bottom:18px;">{notices_html}</div>
 
         <!-- Tab navigation -->
         <div class="tabs">
@@ -1237,79 +1242,17 @@ class CipherHandler(http.server.BaseHTTPRequestHandler):
                 self._redirect('/dashboard')
                 return
             print(f"[*] Full scan (all-in-one) executing for @{username}", flush=True)
-            # Run all scrapers IN PARALLEL to stay within the loading-page timeout.
-            # Post-engagement enrichment (Playwright, ~8 posts × 23s) is disabled in
-            # Full Scan to avoid blowing the deadline; like/comment counts still come
-            # from the API.
-            from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
-
-            results = {
-                'image_urls': {},
-                'profile_info': None,
-                'follower_usernames': [],
-                'post_engagement': [],
-                'all_post_urls': [],
-                'video_urls': [],
-            }
-
-            def _run_stealth():
-                print(f"[*]   → Stealth scan for @{username}", flush=True)
-                return scrape_stealth_profile(username, max_posts=80)
-
-            def _run_profile_info():
-                print(f"[*]   → Profile info scan for @{username}", flush=True)
-                return scrape_profile_info(username)
-
-            def _run_followers():
-                print(f"[*]   → Followers list scan for @{username}", flush=True)
-                return scrape_followers(username, max_followers=200)
-
-            def _run_engagement():
-                print(f"[*]   → Post engagement scan for @{username}", flush=True)
-                return scrape_post_engagement(username, max_posts=12, enrich_comments=False)
-
-            def _run_all_posts():
-                print(f"[*]   → All posts (GraphQL) scan for @{username}", flush=True)
-                return scrape_private_posts(username, max_posts=20)
-
-            def _run_videos():
-                print(f"[*]   → Videos (GraphQL) scan for @{username}", flush=True)
-                return scrape_private_videos(username, max_posts=30)
-
-            tasks = {
-                'image_urls': _run_stealth,
-                'profile_info': _run_profile_info,
-                'follower_usernames': _run_followers,
-                'post_engagement': _run_engagement,
-                'all_post_urls': _run_all_posts,
-                'video_urls': _run_videos,
-            }
-
-            executor = ThreadPoolExecutor(max_workers=len(tasks))
-            future_map = {}
-            try:
-                for key, fn in tasks.items():
-                    future_map[executor.submit(fn)] = key
-                try:
-                    for future in as_completed(future_map, timeout=55):
-                        key = future_map[future]
-                        try:
-                            results[key] = future.result()
-                        except Exception as e:
-                            print(f"[-] full_scan: {key} exception: {e}", flush=True)
-                except TimeoutError:
-                    print("[-] full_scan: parallel deadline reached; using completed results", flush=True)
-            finally:
-                executor.shutdown(wait=False, cancel_futures=True)
+            results = run_full_scan(username)
 
             html = _generate_combined_html(
-                username,
+                escape(username),
                 results['image_urls'],
                 results['profile_info'],
                 results['follower_usernames'],
                 results['post_engagement'],
                 results['all_post_urls'],
                 results['video_urls'],
+                results['notices'],
             )
             html = inject_back_button(html)
             self._serve_html(html)
