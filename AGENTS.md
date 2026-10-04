@@ -93,6 +93,21 @@ SQLite DB persists in a named Docker volume (`cipher_data`).
 - Route: /scrape-profile-info (deducts 1 credit) → /scrape-profile-info-result (executes)
 - Displays results in a dedicated profile info HTML page with stats cards.
 
+## Post Engagement Scraper
+- **post_engagement_scraper.py** — extracts per-post engagement data from any
+  Instagram profile: like count, comment count, caption, timestamp, display URL,
+  and (optionally) actual comment text + liker usernames.
+- Uses the web_profile_info API (no login needed, works for public AND private
+  accounts) to get the post list with engagement counts.
+- Optionally enriches up to 8 posts with Playwright: loads each post page to
+  extract comment text (username + text) and liker usernames from embedded JSON.
+- Integrated exclusively into the Full Scan (All-in-One) workflow as a new
+  "📊 Engagement" tab showing per-post cards with likes, comments, captions,
+  comment text, and liker chips.
+- Usage: `from post_engagement_scraper import scrape_post_engagement`
+  Returns list of dicts: `{shortcode, caption, like_count, comment_count,
+  timestamp, display_url, is_video, comments: [{username, text}], likers: [str]}`
+
 ## Followers Scraper
 - **followers_scraper.py** — extracts follower USERNAMES (not just count) from any
   Instagram profile.

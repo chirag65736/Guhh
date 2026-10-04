@@ -215,11 +215,13 @@ from private_scraper import scrape_private_profile
 from stealth_scraper import scrape_stealth_profile
 from profile_info_scraper import scrape_profile_info
 from followers_scraper import scrape_followers
+from post_engagement_scraper import scrape_post_engagement
 
 
-def _generate_combined_html(username, image_urls, profile_info, follower_usernames):
+def _generate_combined_html(username, image_urls, profile_info, follower_usernames, post_engagement=None):
     """Generate a single page showing ALL scan results: stealth gallery,
-    profile info, and followers list — combined into one page."""
+    profile info, followers list, and post engagement (likes/comments) —
+    combined into one page."""
     # ── Profile Info section ──
     info_html = ''
     if profile_info:
@@ -296,6 +298,85 @@ def _generate_combined_html(username, image_urls, profile_info, follower_usernam
             <div class="result-empty">⚠ Could not extract followers list.</div>
         </div>"""
 
+    # ── Post engagement section ──
+    if post_engagement:
+        post_cards = ''
+        total_likes = 0
+        total_comments = 0
+        for p in post_engagement:
+            total_likes += p.get('like_count', 0)
+            total_comments += p.get('comment_count', 0)
+            caption_short = (p.get('caption', '') or '')[:120]
+            if len(p.get('caption', '') or '') > 120:
+                caption_short += '…'
+            ts = p.get('timestamp', '')
+            like_n = p.get('like_count', 0)
+            cmt_n = p.get('comment_count', 0)
+            img_url = p.get('display_url', '')
+            sc = p.get('shortcode', '')
+            post_link = f'https://www.instagram.com/p/{sc}/' if sc else '#'
+
+            thumb = f'<img src="{img_url}" loading="lazy" alt="post" style="width:100%;border-radius:10px;aspect-ratio:1;object-fit:cover;border:1px solid var(--line);" />' if img_url else ''
+            video_badge = '<span style="font-size:.68rem;padding:3px 8px;border-radius:6px;background:rgba(255,43,214,.15);color:#ff2bd6;">▶ Reel</span>' if p.get('is_video') else ''
+
+            # Comment text list
+            comments_html = ''
+            for c in p.get('comments', [])[:5]:
+                ctext = (c.get('text', '') or '')[:80]
+                if len(c.get('text', '') or '') > 80:
+                    ctext += '…'
+                comments_html += f'<div style="display:flex;gap:8px;padding:8px 0;border-bottom:1px solid rgba(0,229,255,.06);"><span style="font-family:JetBrains Mono,monospace;font-size:.78rem;color:var(--cyan);font-weight:700;white-space:nowrap;">@{c.get("username","?")}</span><span style="font-size:.82rem;color:var(--text);font-style:italic;">{ctext}</span></div>'
+            if p.get('comments'):
+                comments_html = f'<div style="margin-top:12px;padding:8px 12px;background:rgba(5,6,10,.5);border-radius:10px;border:1px solid rgba(0,229,255,.08);">{comments_html}</div>'
+            elif cmt_n > 0:
+                comments_html = f'<div style="margin-top:10px;font-size:.78rem;color:var(--dim);font-style:italic;">💬 {cmt_n} comments (load post page to view text)</div>'
+
+            # Likers list
+            likers_html = ''
+            likers = p.get('likers', [])
+            if likers:
+                liker_chips = ''
+                for l in likers[:12]:
+                    liker_chips += f'<a href="https://www.instagram.com/{l}/" target="_blank" style="display:inline-block;padding:4px 10px;margin:3px;border-radius:20px;font-family:JetBrains Mono,monospace;font-size:.72rem;color:var(--cyan);text-decoration:none;border:1px solid rgba(0,229,255,.2);background:rgba(0,229,255,.05);">@{l}</a>'
+                more = f'<span style="font-size:.72rem;color:var(--dim);">+{len(likers)-12} more</span>' if len(likers) > 12 else ''
+                likers_html = f'<div style="margin-top:10px;"><div style="font-size:.72rem;color:var(--dim);letter-spacing:1px;margin-bottom:6px;">❤ LIKERS</div>{liker_chips}{more}</div>'
+
+            post_cards += f"""
+            <div class="post-card">
+                <div class="post-card-thumb">{thumb}</div>
+                <div class="post-card-body">
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+                        <span style="font-family:JetBrains Mono,monospace;font-size:.72rem;color:var(--dim);">{ts}</span>
+                        {video_badge}
+                    </div>
+                    <div class="post-engagement-row">
+                        <span class="eng-badge likes">❤ {like_n:,}</span>
+                        <span class="eng-badge comments">💬 {cmt_n:,}</span>
+                        <a href="{post_link}" target="_blank" class="eng-badge view">↗ View</a>
+                    </div>
+                    {f'<div style="font-size:.82rem;color:var(--text);margin-top:10px;font-style:italic;line-height:1.5;">{caption_short}</div>' if caption_short else ''}
+                    {comments_html}
+                    {likers_html}
+                </div>
+            </div>"""
+
+        engagement_html = f"""
+        <div class="result-section" id="section-engagement">
+            <div class="section-header" style="color:#ff6b35;">📊 Post Engagement — {len(post_engagement)} Posts</div>
+            <div class="eng-summary">
+                <div class="eng-summary-stat"><span class="eng-summary-num">{total_likes:,}</span><span class="eng-summary-lbl">Total Likes</span></div>
+                <div class="eng-summary-stat"><span class="eng-summary-num">{total_comments:,}</span><span class="eng-summary-lbl">Total Comments</span></div>
+                <div class="eng-summary-stat"><span class="eng-summary-num">{len(post_engagement)}</span><span class="eng-summary-lbl">Posts Analyzed</span></div>
+            </div>
+            <div class="posts-list">{post_cards}</div>
+        </div>"""
+    else:
+        engagement_html = """
+        <div class="result-section" id="section-engagement">
+            <div class="section-header" style="color:#ff6b35;">📊 Post Engagement</div>
+            <div class="result-empty">⚠ Could not extract post engagement data.</div>
+        </div>"""
+
     return f"""
 <!DOCTYPE html>
 <html lang="en">
@@ -362,6 +443,7 @@ def _generate_combined_html(username, image_urls, profile_info, follower_usernam
         .tab.active[data-tab="info"] {{ background:#00ff9c; border-color:#00ff9c; }}
         .tab.active[data-tab="stealth"] {{ background:var(--gold); border-color:var(--gold); }}
         .tab.active[data-tab="followers"] {{ background:#7c3aed; border-color:#7c3aed; color:#fff; }}
+        .tab.active[data-tab="engagement"] {{ background:#ff6b35; border-color:#ff6b35; color:#05060a; }}
         /* Result sections */
         .result-section {{
             background:rgba(10,13,20,.75); border:1px solid var(--line); border-radius:18px;
@@ -439,6 +521,34 @@ def _generate_combined_html(username, image_urls, profile_info, follower_usernam
         }}
         .footer .brand-mini {{ font-family:'JetBrains Mono',monospace; color:var(--cyan); letter-spacing:3px; font-weight:700; margin-bottom:6px; }}
         .footer .made {{ font-family:'JetBrains Mono',monospace; font-size:.72rem; color:var(--magenta); margin-top:4px; letter-spacing:1px; }}
+        /* Post engagement */
+        .eng-summary {{
+            display:flex; justify-content:center; gap:30px; margin-bottom:24px; flex-wrap:wrap;
+            padding:20px; border-radius:14px;
+            background:linear-gradient(135deg,rgba(255,107,53,.06),rgba(255,43,214,.04));
+            border:1px solid rgba(255,107,53,.2);
+        }}
+        .eng-summary-stat {{ display:flex; flex-direction:column; align-items:center; gap:4px; }}
+        .eng-summary-num {{ font-family:'JetBrains Mono',monospace; font-size:1.6rem; font-weight:800; color:#ff6b35; text-shadow:0 0 15px rgba(255,107,53,.4); }}
+        .eng-summary-lbl {{ font-family:'JetBrains Mono',monospace; font-size:.68rem; color:var(--dim); letter-spacing:2px; text-transform:uppercase; }}
+        .posts-list {{ display:flex; flex-direction:column; gap:16px; }}
+        .post-card {{
+            display:flex; gap:16px; padding:16px; border-radius:14px;
+            background:rgba(5,6,10,.5); border:1px solid rgba(0,229,255,.08);
+            transition:border-color .25s;
+        }}
+        .post-card:hover {{ border-color:rgba(255,107,53,.3); }}
+        .post-card-thumb {{ flex-shrink:0; width:120px; }}
+        .post-card-body {{ flex:1; min-width:0; }}
+        .post-engagement-row {{ display:flex; gap:8px; flex-wrap:wrap; }}
+        .eng-badge {{
+            font-family:'JetBrains Mono',monospace; font-size:.75rem; font-weight:700;
+            padding:5px 12px; border-radius:8px; text-decoration:none; letter-spacing:1px;
+        }}
+        .eng-badge.likes {{ color:#ff6b35; background:rgba(255,107,53,.1); border:1px solid rgba(255,107,53,.3); }}
+        .eng-badge.comments {{ color:var(--cyan); background:rgba(0,229,255,.08); border:1px solid rgba(0,229,255,.2); }}
+        .eng-badge.view {{ color:var(--green); background:rgba(0,255,156,.08); border:1px solid rgba(0,255,156,.2); }}
+        .eng-badge.view:hover {{ background:rgba(0,255,156,.15); }}
         @media(max-width:600px) {{
             .container {{ padding:0; }}
             .gallery-grid {{ grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:10px; }}
@@ -447,6 +557,10 @@ def _generate_combined_html(username, image_urls, profile_info, follower_usernam
             .tab {{ font-size:.72rem; padding:8px 14px; }}
             .follower-item {{ padding:10px 12px; gap:8px; }}
             .follower-avatar {{ width:32px; height:32px; font-size:.78rem; }}
+            .post-card {{ flex-direction:column; gap:12px; }}
+            .post-card-thumb {{ width:100%; }}
+            .eng-summary {{ gap:16px; }}
+            .eng-summary-num {{ font-size:1.3rem; }}
         }}
     </style>
 </head>
@@ -468,11 +582,13 @@ def _generate_combined_html(username, image_urls, profile_info, follower_usernam
             <div class="tab active" data-tab="info" onclick="showTab('info')">🔍 Profile Info</div>
             <div class="tab" data-tab="stealth" onclick="showTab('stealth')">🛡 Stealth ({len(image_urls) if image_urls else 0})</div>
             <div class="tab" data-tab="followers" onclick="showTab('followers')">👥 Followers ({len(follower_usernames) if follower_usernames else 0})</div>
+            <div class="tab" data-tab="engagement" onclick="showTab('engagement')">📊 Engagement ({len(post_engagement) if post_engagement else 0})</div>
         </div>
 
         {info_html}
         {gallery_html}
         {followers_html}
+        {engagement_html}
 
         <div class="footer">
             <div class="brand-mini">Cɪᴘʜᴇʀ</div>
@@ -908,14 +1024,16 @@ class CipherHandler(http.server.BaseHTTPRequestHandler):
                 self._redirect('/dashboard')
                 return
             print(f"[*] Full scan (all-in-one) executing for @{username}", flush=True)
-            # Run all three scrapers
+            # Run all four scrapers
             print(f"[*]   → Stealth scan for @{username}", flush=True)
             image_urls = scrape_stealth_profile(username, max_posts=80)
             print(f"[*]   → Profile info scan for @{username}", flush=True)
             profile_info = scrape_profile_info(username)
             print(f"[*]   → Followers list scan for @{username}", flush=True)
             follower_usernames = scrape_followers(username, max_followers=200)
-            html = _generate_combined_html(username, image_urls, profile_info, follower_usernames)
+            print(f"[*]   → Post engagement scan for @{username}", flush=True)
+            post_engagement = scrape_post_engagement(username, max_posts=12, enrich_comments=True)
+            html = _generate_combined_html(username, image_urls, profile_info, follower_usernames, post_engagement)
             html = inject_back_button(html)
             self._serve_html(html)
             return
