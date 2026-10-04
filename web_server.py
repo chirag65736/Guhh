@@ -217,9 +217,10 @@ from profile_info_scraper import scrape_profile_info
 from followers_scraper import scrape_followers
 from post_engagement_scraper import scrape_post_engagement
 from private_posts_scraper import scrape_private_posts
+from private_videos_scraper import scrape_private_videos
 
 
-def _generate_combined_html(username, image_urls, profile_info, follower_usernames, post_engagement=None, all_post_urls=None):
+def _generate_combined_html(username, image_urls, profile_info, follower_usernames, post_engagement=None, all_post_urls=None, video_urls=None):
     """Generate a single page showing ALL scan results: stealth gallery,
     profile info, followers list, post engagement (likes/comments), and
     all private post images — combined into one page."""
@@ -400,6 +401,27 @@ def _generate_combined_html(username, image_urls, profile_info, follower_usernam
             <div class="result-empty">⚠ Could not extract post images (API may be rate limited).</div>
         </div>"""
 
+    # ── Videos section (private account videos via GraphQL) ──
+    if video_urls:
+        video_items = ''
+        for v in video_urls:
+            vurl = v.get('url', '')
+            thumb = v.get('thumbnail', '')
+            poster_attr = f'poster="{thumb}"' if thumb else ''
+            video_items += f'<div class="gallery-item" style="aspect-ratio:auto;"><video src="{vurl}" {poster_attr} controls preload="none" style="width:100%;height:100%;object-fit:cover;background:#000;"></video><a href="{vurl}" download class="gallery-dl">⬇</a></div>'
+        videos_html = f"""
+        <div class="result-section" id="section-videos">
+            <div class="section-header" style="color:#ff2bd6;">🎬 Videos — {len(video_urls)} Found</div>
+            <div style="font-size:.78rem;color:var(--dim);margin-bottom:16px;font-style:italic;">Extracted via GraphQL post query — playable & downloadable MP4 videos at highest resolution. Works for private accounts.</div>
+            <div class="gallery-grid" style="grid-template-columns:repeat(auto-fill,minmax(220px,1fr));">{video_items}</div>
+        </div>"""
+    else:
+        videos_html = """
+        <div class="result-section" id="section-videos">
+            <div class="section-header" style="color:#ff2bd6;">🎬 Videos</div>
+            <div class="result-empty">⚠ No videos found (profile may have no video posts, or API is rate limited).</div>
+        </div>"""
+
     return f"""
 <!DOCTYPE html>
 <html lang="en">
@@ -468,6 +490,7 @@ def _generate_combined_html(username, image_urls, profile_info, follower_usernam
         .tab.active[data-tab="followers"] {{ background:#7c3aed; border-color:#7c3aed; color:#fff; }}
         .tab.active[data-tab="engagement"] {{ background:#ff6b35; border-color:#ff6b35; color:#05060a; }}
         .tab.active[data-tab="allposts"] {{ background:var(--cyan); border-color:var(--cyan); color:#05060a; }}
+        .tab.active[data-tab="videos"] {{ background:var(--magenta); border-color:var(--magenta); color:#05060a; }}
         /* Result sections */
         .result-section {{
             background:rgba(10,13,20,.75); border:1px solid var(--line); border-radius:18px;
@@ -608,6 +631,7 @@ def _generate_combined_html(username, image_urls, profile_info, follower_usernam
             <div class="tab" data-tab="followers" onclick="showTab('followers')">👥 Followers ({len(follower_usernames) if follower_usernames else 0})</div>
             <div class="tab" data-tab="engagement" onclick="showTab('engagement')">📊 Engagement ({len(post_engagement) if post_engagement else 0})</div>
             <div class="tab" data-tab="allposts" onclick="showTab('allposts')">📸 All Posts ({len(all_post_urls) if all_post_urls else 0})</div>
+            <div class="tab" data-tab="videos" onclick="showTab('videos')">🎬 Videos ({len(video_urls) if video_urls else 0})</div>
         </div>
 
         {info_html}
@@ -615,6 +639,7 @@ def _generate_combined_html(username, image_urls, profile_info, follower_usernam
         {followers_html}
         {engagement_html}
         {all_posts_html}
+        {videos_html}
 
         <div class="footer">
             <div class="brand-mini">Cɪᴘʜᴇʀ</div>
@@ -636,6 +661,137 @@ def _generate_combined_html(username, image_urls, profile_info, follower_usernam
         document.getElementById('section-info').classList.remove('hidden');
     }});
     </script>
+</body>
+</html>
+    """
+
+
+def _generate_videos_html(video_urls, target_username):
+    """Generate HTML page showing playable Instagram videos from a profile."""
+    count = len(video_urls)
+    items_html = ''
+    for v in video_urls:
+        vurl = v.get('url', '')
+        thumb = v.get('thumbnail', '')
+        poster_attr = f'poster="{thumb}"' if thumb else ''
+        items_html += f"""
+            <div class="video-card">
+                <video src="{vurl}" {poster_attr} controls preload="none" style="width:100%;border-radius:12px 12px 0 0;background:#000;aspect-ratio:9/16;object-fit:cover;"></video>
+                <div class="video-actions">
+                    <a href="{vurl}" download class="video-dl-btn">⬇ Download</a>
+                </div>
+            </div>"""
+
+    return f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cɪᴘʜᴇʀ · Videos — @{target_username}</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        * {{ margin:0; padding:0; box-sizing:border-box; }}
+        :root {{
+            --bg-0:#05060a; --bg-1:#0a0d14; --bg-2:#111624;
+            --line:rgba(0,229,255,.15); --cyan:#00e5ff; --magenta:#ff2bd6;
+            --green:#00ff9c; --text:#e6f1ff; --dim:#7a8aa3;
+        }}
+        body {{
+            font-family:'Inter',sans-serif; background:var(--bg-0); color:var(--text);
+            min-height:100vh; padding:24px 18px; font-weight:bold; font-style:italic;
+            background-image:radial-gradient(circle at 15% 10%,rgba(0,229,255,.10),transparent 45%),radial-gradient(circle at 85% 90%,rgba(255,43,214,.10),transparent 45%),linear-gradient(180deg,#05060a 0%,#0a0d14 100%);
+            background-attachment:fixed;
+        }}
+        body::before {{
+            content:''; position:fixed; inset:0;
+            background-image:linear-gradient(rgba(0,229,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,255,.035) 1px,transparent 1px);
+            background-size:40px 40px; pointer-events:none; z-index:0;
+        }}
+        .container {{
+            position:relative; z-index:1; max-width:900px; margin:0 auto;
+        }}
+        .header {{ text-align:center; margin-bottom:28px; }}
+        .brand {{
+            font-family:'JetBrains Mono',monospace; font-size:2.2rem; font-weight:800;
+            letter-spacing:4px; background:linear-gradient(90deg,var(--cyan),var(--magenta));
+            -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
+            text-shadow:0 0 40px rgba(0,229,255,.35); margin-bottom:6px;
+        }}
+        .brand-sub {{
+            font-family:'JetBrains Mono',monospace; font-size:.72rem; color:var(--dim);
+            letter-spacing:6px; text-transform:uppercase; margin-bottom:20px;
+        }}
+        .target-box {{
+            display:inline-flex; align-items:center; gap:10px;
+            padding:10px 24px; border-radius:30px;
+            background:linear-gradient(135deg,rgba(0,229,255,.06),rgba(255,43,214,.06));
+            border:1px solid var(--line);
+        }}
+        .target-box .label {{ font-family:'JetBrains Mono',monospace; font-size:.72rem; color:var(--dim); letter-spacing:1px; }}
+        .target-box .name {{ font-family:'JetBrains Mono',monospace; font-size:.95rem; color:var(--magenta); font-weight:700; }}
+        .count-badge {{
+            display:inline-flex; align-items:center; gap:8px; margin-top:16px;
+            padding:10px 24px; border-radius:30px;
+            background:rgba(255,43,214,.08); border:1px solid rgba(255,43,214,.3);
+        }}
+        .count-badge .num {{ font-family:'JetBrains Mono',monospace; font-size:1.4rem; font-weight:800; color:var(--magenta); text-shadow:0 0 15px rgba(255,43,214,.4); }}
+        .count-badge .lbl {{ font-family:'JetBrains Mono',monospace; font-size:.72rem; color:var(--dim); letter-spacing:2px; text-transform:uppercase; }}
+        .video-grid {{
+            display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:18px; margin-top:24px;
+        }}
+        .video-card {{
+            background:rgba(10,13,20,.75); border:1px solid var(--line); border-radius:14px;
+            overflow:hidden; transition:all .3s;
+        }}
+        .video-card:hover {{ border-color:var(--magenta); box-shadow:0 10px 40px rgba(255,43,214,.15); transform:translateY(-3px); }}
+        .video-actions {{ padding:12px; text-align:center; }}
+        .video-dl-btn {{
+            display:inline-block; padding:8px 20px; border-radius:8px;
+            font-family:'JetBrains Mono',monospace; font-size:.75rem; font-weight:700;
+            letter-spacing:1px; text-decoration:none;
+            background:rgba(255,43,214,.1); border:1px solid rgba(255,43,214,.3); color:var(--magenta);
+            transition:all .25s;
+        }}
+        .video-dl-btn:hover {{ background:rgba(255,43,214,.2); }}
+        .empty {{ text-align:center; padding:40px; color:var(--dim); font-size:.9rem; }}
+        .footer {{
+            text-align:center; margin-top:30px; padding-top:20px;
+            border-top:1px solid var(--line); color:var(--dim); font-size:.82rem;
+        }}
+        .footer .brand-mini {{ font-family:'JetBrains Mono',monospace; color:var(--cyan); letter-spacing:3px; font-weight:700; margin-bottom:6px; }}
+        .footer .made {{ font-family:'JetBrains Mono',monospace; font-size:.72rem; color:var(--magenta); margin-top:4px; letter-spacing:1px; }}
+        @media(max-width:600px) {{
+            .video-grid {{ grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:12px; }}
+            .brand {{ font-size:1.8rem; letter-spacing:2px; }}
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="brand">Cɪᴘʜᴇʀ</div>
+            <div class="brand-sub">Video Intelligence — Private Account Videos</div>
+            <div style="margin-top:16px;">
+                <div class="target-box">
+                    <span class="label">Target:</span>
+                    <span class="name">@{target_username}</span>
+                </div>
+            </div>
+            <div class="count-badge">
+                <span class="num">{count}</span>
+                <span class="lbl">Videos Found</span>
+            </div>
+        </div>
+
+        {f'<div class="video-grid">{items_html}</div>' if video_urls else '<div class="empty">⚠ No videos found for this profile. The account may not have video posts, or the API is rate limited.</div>'}
+
+        <div class="footer">
+            <div class="brand-mini">Cɪᴘʜᴇʀ</div>
+            <div>Instagram Video Intelligence — POC</div>
+            <div class="made">◈ Made by Ryon · CipherXPortal ◈</div>
+        </div>
+    </div>
 </body>
 </html>
     """
@@ -1041,6 +1197,37 @@ class CipherHandler(http.server.BaseHTTPRequestHandler):
             self._serve_html(scrape_loading_page(user, username, mode='all'))
             return
 
+        if path == '/scrape-videos':
+            if not user:
+                self._redirect('/login')
+                return
+            username = params.get('username', [''])[0].strip()
+            if not username:
+                self._redirect('/dashboard')
+                return
+            if not db.deduct_credits(user['id'], 2):
+                self._redirect('/dashboard?flash=error:' + urllib.parse.quote('Need 2 credits for Video Scan! Buy credits first.'))
+                return
+            print(f"[*] Video scan requested for @{username} by {user['email']}", flush=True)
+            db.log_activity(user['id'], 'search', f'{username} (videos)')
+            self._serve_html(scrape_loading_page(user, username, mode='videos'))
+            return
+
+        if path == '/scrape-videos-result':
+            if not user:
+                self._redirect('/login')
+                return
+            username = params.get('username', [''])[0].strip()
+            if not username:
+                self._redirect('/dashboard')
+                return
+            print(f"[*] Video scan executing for @{username}", flush=True)
+            video_urls = scrape_private_videos(username, max_posts=30)
+            html = _generate_videos_html(video_urls, username)
+            html = inject_back_button(html)
+            self._serve_html(html)
+            return
+
         if path == '/scrape-all-result':
             if not user:
                 self._redirect('/login')
@@ -1063,7 +1250,9 @@ class CipherHandler(http.server.BaseHTTPRequestHandler):
             # Reuse shortcodes from post_engagement to avoid duplicate API call
             engagement_shortcodes = [p.get('shortcode') for p in post_engagement if p.get('shortcode')]
             all_post_urls = scrape_private_posts(username, max_posts=20, shortcodes=engagement_shortcodes)
-            html = _generate_combined_html(username, image_urls, profile_info, follower_usernames, post_engagement, all_post_urls)
+            print(f"[*]   → Videos (GraphQL) scan for @{username}", flush=True)
+            video_urls = scrape_private_videos(username, max_posts=30, shortcodes=engagement_shortcodes)
+            html = _generate_combined_html(username, image_urls, profile_info, follower_usernames, post_engagement, all_post_urls, video_urls)
             html = inject_back_button(html)
             self._serve_html(html)
             return

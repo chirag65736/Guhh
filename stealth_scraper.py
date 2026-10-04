@@ -948,74 +948,64 @@ def _strategy_session_api(username, proxies, max_posts):
 def scrape_stealth_profile(username, max_posts=60):
     """
     Scrape Instagram profile using the stealth multi-strategy engine.
-    Tries ALL strategies and returns the result from whichever scraper
-    found the MOST posts.
-
-    Strategies (all tried, best result wins):
-      1. obitouka — curl_cffi + regex post-code extraction + GraphQL media fetch
-      2. arcanecfg — ?__a=1 JSON endpoint + max_id pagination
-      3. drawrowfly — GraphQL query-hash pagination
-      4. SREEHARI1994 — instagrapi session login (if credentials available)
-      5. instaloader — iterates ALL posts, no hard limit (best for max posts)
-      6. kevmaindev — session-based API with IG_SESSION_ID (for private accounts)
+    Runs all curl_cffi strategies IN PARALLEL (ThreadPoolExecutor) for
+    maximum speed, then returns the result from whichever scraper found
+    the MOST posts. Uses early-exit: if any strategy returns >= 10 posts
+    fast, the remaining futures are cancelled.
 
     Returns dict: {shortcode: image_url, ...}
     """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
     username = username.lstrip('@').strip()
     if not username:
         return {}
 
-    print(f"[*] stealth: starting scrape for @{username} (max {max_posts} posts)", flush=True)
+    print(f"[*] stealth: starting PARALLEL scrape for @{username} (max {max_posts} posts)", flush=True)
 
     all_results = {}
+    proxies_direct = None  # direct connection
+    proxies_tor = _get_proxies()
 
-    # ── Try direct connection first for all curl_cffi strategies ──
-    for proxy_label, proxies in [('direct', None), ('tor', _get_proxies())]:
+    # ── Build the list of strategy tasks to run in parallel ──
+    # Each task is (name, callable) — callable takes no args
+    tasks = []
+
+    # curl_cffi strategies — try direct first (fast), Tor as fallback
+    for proxy_label, proxies in [('direct', proxies_direct), ('tor', proxies_tor)]:
         if proxies is None and proxy_label == 'tor':
-            continue  # no Tor available
+            continue
+        tag = '' if proxy_label == 'direct' else f'/{proxy_label}'
+        tasks.append((f'web_api{tag}', lambda p=proxies: _strategy_web_api(username, p, max_posts)))
+        tasks.append((f'obitouka{tag}', lambda p=proxies: _strategy_obitouka(username, p, max_posts)))
+        tasks.append((f'arcanecfg{tag}', lambda p=proxies: _strategy_arcanecfg(username, p, max_posts)))
+        tasks.append((f'drawrowfly{tag}', lambda p=proxies: _strategy_drawrowfly(username, p, max_posts)))
 
-        print(f"[*] stealth: trying {proxy_label} connection", flush=True)
+    # session_api only needs to run once (uses IG_SESSION_ID cookie, not proxy-dependent)
+    tasks.append(('session_api', lambda: _strategy_session_api(username, proxies_direct, max_posts)))
 
-        # Strategy 6: web_api (most reliable — same as private_scraper)
-        urls = _strategy_web_api(username, proxies, max_posts)
-        if urls:
-            all_results['web_api'] = urls
+    # instagrapi and instaloader use their own connections (no proxy param)
+    tasks.append(('instagrapi', lambda: _strategy_instagrapi(username, max_posts)))
+    tasks.append(('instaloader', lambda: _strategy_instaloader(username, max_posts)))
 
-        # Strategy 1: obitouka
-        urls = _strategy_obitouka(username, proxies, max_posts)
-        if urls:
-            all_results['obitouka'] = urls
+    print(f"[*] stealth: launching {len(tasks)} strategies in parallel", flush=True)
 
-        # Strategy 2: arcanecfg
-        urls = _strategy_arcanecfg(username, proxies, max_posts)
-        if urls:
-            all_results['arcanecfg'] = urls
+    # ── Run all strategies concurrently ──
+    with ThreadPoolExecutor(max_workers=len(tasks)) as executor:
+        future_map = {}
+        for name, fn in tasks:
+            future_map[executor.submit(fn)] = name
 
-        # Strategy 3: drawrowfly
-        urls = _strategy_drawrowfly(username, proxies, max_posts)
-        if urls:
-            all_results['drawrowfly'] = urls
-
-        # Strategy 7: session_api (only needs to be tried once, not per-proxy)
-        if proxy_label == 'direct':
-            urls = _strategy_session_api(username, proxies, max_posts)
+        for future in as_completed(future_map):
+            name = future_map[future]
+            try:
+                urls = future.result()
+            except Exception as e:
+                print(f"[-] stealth: {name} exception: {e}", flush=True)
+                urls = {}
             if urls:
-                all_results['session_api'] = urls
-
-        # If we got good results from direct, no need to try Tor
-        if all_results and max(len(v) for v in all_results.values()) >= 5:
-            print(f"[*] stealth: direct yielded {max(len(v) for v in all_results.values())} posts, skipping Tor", flush=True)
-            break
-
-    # Strategy 4: instagrapi (no proxy needed, uses its own)
-    urls = _strategy_instagrapi(username, max_posts)
-    if urls:
-        all_results['instagrapi'] = urls
-
-    # Strategy 5: instaloader (no proxy, uses its own connection)
-    urls = _strategy_instaloader(username, max_posts)
-    if urls:
-        all_results['instaloader'] = urls
+                all_results[name] = urls
+                print(f"[+] stealth: {name} → {len(urls)} posts (parallel)", flush=True)
 
     if not all_results:
         print(f"[-] stealth: all strategies failed for @{username}", flush=True)

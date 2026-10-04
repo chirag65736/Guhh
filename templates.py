@@ -860,6 +860,13 @@ def dashboard_page(user, flash=None, reviews=None):
                 <button type="submit" class="btn btn-primary" style="background:linear-gradient(135deg,var(--gold),#7c3aed);">⚡ Full Scan</button>
             </form>
         </div>
+        <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--line);">
+            <p style="color:var(--dim);font-size:.78rem;margin-bottom:12px;">🎬 <b style="color:var(--magenta);">Video Scan</b> — finds & extracts <b>playable MP4 videos</b> from any profile (including <b>private accounts</b>) via GraphQL. View & download directly. <b style="color:var(--magenta);">2 credits</b> per scan.</p>
+            <form action="/scrape-videos" method="get" style="display:flex;gap:12px;flex-wrap:wrap;">
+                <input type="text" name="username" placeholder="Instagram username..." required style="flex:1;min-width:200px;" autocomplete="off">
+                <button type="submit" class="btn btn-outline" style="border-color:var(--magenta);color:var(--magenta);">🎬 Video Scan</button>
+            </form>
+        </div>
     </div>"""
 
     # Per-post payment
@@ -943,6 +950,11 @@ def scrape_loading_page(user, username, mode='quick'):
         mode_label = 'Full Scan (All-in-One)'
         mode_color = 'var(--gold)'
         mode_icon = '⚡'
+    elif mode == 'videos':
+        api_url = f"/scrape-videos-result?username={urllib.parse.quote(username)}"
+        mode_label = 'Video Scan'
+        mode_color = 'var(--magenta)'
+        mode_icon = '🎬'
     else:
         api_url = f"/scrape-private-result?username={urllib.parse.quote(username)}"
         mode_label = 'Private Deep Scan'
