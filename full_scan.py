@@ -100,6 +100,33 @@ def _media(node, result):
                                         'shortcode': node.get('shortcode') or node.get('code', '')})
 
 
+_NON_USERNAMES = frozenset({
+    'p', 'reel', 'reels', 'explore', 'accounts', 'www', 'static', 'i',
+    'api', 'graphql', 'instagram', 'about', 'privacy', 'terms', 'blog',
+    'direct', 'stories', 'highlights', 'channel', 'tv', 'live', 'shop',
+    'threads', 'meta',
+})
+
+
+def _likers_from_html(html, username):
+    """Extract likely liker usernames from post page embedded JSON."""
+    names = set(re.findall(r'"username"\s*:\s*"([a-zA-Z0-9._]+)"', html))
+    names -= _NON_USERNAMES
+    names.discard(username)
+    return sorted(names)[:30]
+
+
+def _fetch_likers(client, media_pk):
+    """Fetch liker usernames for a single post via the media likers API."""
+    response = client.fetch(f'/api/v1/media/{media_pk}/likers/')
+    if response is None:
+        return []
+    try:
+        return [u.get('username') for u in response.json().get('users', []) if u.get('username')]
+    except (ValueError, AttributeError):
+        return []
+
+
 class _Client:
     def __init__(self, deadline, notices, identity):
         self.deadline, self.notices, self.identity = deadline, notices, identity
@@ -271,6 +298,13 @@ def run_full_scan(username, budget=55):
                                 if tag:
                                     media_node[field] = tag.get('content', '')
                             _media(media_node, result)
+                    # Also extract liker usernames from the post page HTML
+                    likers = _likers_from_html(response.text, username)
+                    if likers:
+                        for entry in result['post_engagement']:
+                            if entry.get('shortcode') == code and not entry.get('likers'):
+                                entry['likers'] = likers
+                                break
                 if media_before != (len(result['all_post_urls']), len(result['video_urls'])):
                     available_posts.add(post_key(node))
                 if time.monotonic() + 0.5 >= deadline:
@@ -295,6 +329,36 @@ def run_full_scan(username, budget=55):
                         pass
             if not result['follower_usernames']:
                 result['notices'].append('Follower list unavailable: requires an authorized Instagram session. Commenters are not counted as followers.')
+            # Enrich engagement entries with liker usernames via API.
+            # The likers endpoint is in the 'api' group; fetching after
+            # followers avoids a 401 cooldown blocking the friendships call.
+            if result['post_engagement'] and time.monotonic() + 1 < deadline:
+                node_by_code = {}
+                for n in nodes:
+                    c = n.get('shortcode') or n.get('code')
+                    if c:
+                        node_by_code[c] = n
+                max_likers = min(12, len(result['post_engagement']))
+                enriched = 0
+                for entry in result['post_engagement'][:max_likers]:
+                    if entry.get('likers'):
+                        enriched += 1
+                        continue
+                    if time.monotonic() + 1 >= deadline:
+                        break
+                    code = entry.get('shortcode', '')
+                    node = node_by_code.get(code, {})
+                    media_pk = node.get('pk') or node.get('id')
+                    if not media_pk:
+                        continue
+                    likers = _fetch_likers(client, media_pk)
+                    if likers:
+                        entry['likers'] = likers[:30]
+                        enriched += 1
+                if enriched:
+                    result['notices'].append(f'Liker usernames extracted for {enriched} of {max_likers} posts.')
+                elif not session_id:
+                    result['notices'].append('Liker usernames require an authorized Instagram session (IG_SESSION_ID).')
             if not nodes:
                 result['notices'].append('No accessible posts returned. Private content requires permission from the account; rate limits cannot be bypassed.')
         except (ValueError, TypeError, AttributeError, KeyError):
