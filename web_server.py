@@ -326,11 +326,11 @@ def _generate_combined_html(username, image_urls, profile_info, follower_usernam
 
             # Comment text list
             comments_html = ''
-            for c in p.get('comments', [])[:5]:
+            for c in p.get('comments', []):
                 ctext = (c.get('text', '') or '')[:80]
                 if len(c.get('text', '') or '') > 80:
                     ctext += '…'
-                comments_html += f'<div style="display:flex;gap:8px;padding:8px 0;border-bottom:1px solid rgba(0,229,255,.06);"><span style="font-family:JetBrains Mono,monospace;font-size:.78rem;color:var(--cyan);font-weight:700;white-space:nowrap;">@{c.get("username","?")}</span><span style="font-size:.82rem;color:var(--text);font-style:italic;">{ctext}</span></div>'
+                comments_html += f'<div style="display:flex;gap:8px;padding:8px 0;border-bottom:1px solid rgba(0,229,255,.06);"><span style="font-family:JetBrains Mono,monospace;font-size:.78rem;color:var(--cyan);font-weight:700;white-space:nowrap;">@{escape(c.get("username","?"))}</span><span style="font-size:.82rem;color:var(--text);font-style:italic;">{escape(ctext)}</span></div>'
             if p.get('comments'):
                 comments_html = f'<div style="margin-top:12px;padding:8px 12px;background:rgba(5,6,10,.5);border-radius:10px;border:1px solid rgba(0,229,255,.08);">{comments_html}</div>'
             elif cmt_n > 0:
@@ -341,9 +341,9 @@ def _generate_combined_html(username, image_urls, profile_info, follower_usernam
             likers = p.get('likers', [])
             if likers:
                 liker_chips = ''
-                for l in likers[:12]:
+                for l in likers:
                     liker_chips += f'<a href="https://www.instagram.com/{l}/" target="_blank" style="display:inline-block;padding:4px 10px;margin:3px;border-radius:20px;font-family:JetBrains Mono,monospace;font-size:.72rem;color:var(--cyan);text-decoration:none;border:1px solid rgba(0,229,255,.2);background:rgba(0,229,255,.05);">@{l}</a>'
-                more = f'<span style="font-size:.72rem;color:var(--dim);">+{len(likers)-12} more</span>' if len(likers) > 12 else ''
+                more = ''
                 likers_html = f'<div style="margin-top:10px;"><div style="font-size:.72rem;color:var(--dim);letter-spacing:1px;margin-bottom:6px;">❤ LIKERS</div>{liker_chips}{more}</div>'
 
             post_cards += f"""

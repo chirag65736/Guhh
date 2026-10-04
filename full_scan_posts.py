@@ -9,6 +9,19 @@ def post_key(node):
     return str(node.get('shortcode') or node.get('code') or node.get('pk') or node.get('id') or '')
 
 
+def merge_post(existing, incoming):
+    """Sparse API records must not erase richer embedded carousel/engagement data."""
+    merged = dict(existing)
+    for field, value in incoming.items():
+        if isinstance(value, dict) and isinstance(merged.get(field), dict):
+            merged[field] = merge_post(merged[field], value)
+        elif value is not None and value != '' and value != []:
+            if isinstance(value, list) and isinstance(merged.get(field), list) and len(merged[field]) > len(value):
+                continue
+            merged[field] = value
+    return merged
+
+
 def collect_posts(client, user, initial_nodes, authorized):
     """Merge pages without a post cap; stop on access denial/deadline/bad cursors.
 
@@ -19,15 +32,15 @@ def collect_posts(client, user, initial_nodes, authorized):
     for node in initial_nodes:
         key = post_key(node)
         if key:
-            nodes[key] = dict(nodes.get(key, {}), **node)
+            nodes[key] = merge_post(nodes.get(key, {}), node)
     if not user:
         return list(nodes.values())
-    timeline = user.get('edge_owner_to_timeline_media') or {}
+    timeline = user.get('edge_owner_to_timeline_media') or user.get('timeline_media') or {}
     for edge in timeline.get('edges', []):
         node = edge.get('node') or {}
         key = post_key(node)
         if key:
-            nodes[key] = dict(nodes.get(key, {}), **node)
+            nodes[key] = merge_post(nodes.get(key, {}), node)
     if user.get('is_private') and not authorized:
         client.notices.append('This profile is private. All posts require an Instagram session from the owner or an approved follower; public previews are not the full account.')
         return list(nodes.values())
@@ -40,7 +53,7 @@ def collect_posts(client, user, initial_nodes, authorized):
     total = timeline.get('count', user.get('media_count'))
     # A session feed can supply full carousel/video nodes, including when the
     # profile response exposes a count but no timeline cursor.
-    use_feed = authorized and not (more and cursor) and (not nodes or (isinstance(total, int) and total > len(nodes)))
+    use_feed = authorized and (not nodes or more or (isinstance(total, int) and total > len(nodes)))
     if not more and not use_feed:
         return list(nodes.values())
     if use_feed:
@@ -81,7 +94,7 @@ def collect_posts(client, user, initial_nodes, authorized):
         for node in batch:
             key = post_key(node)
             if key:
-                nodes[key] = dict(nodes.get(key, {}), **node)
+                nodes[key] = merge_post(nodes.get(key, {}), node)
         if not more:
             return list(nodes.values())
         if not next_cursor or next_cursor == cursor or next_cursor in seen_cursors:

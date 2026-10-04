@@ -16,10 +16,10 @@ from email.utils import parsedate_to_datetime
 
 from bs4 import BeautifulSoup
 from curl_cffi import requests
-from post_engagement_scraper import _parse_post_node
+from full_scan_engagement import parse_engagement, fetch_followers, enrich_entries
 from profile_info_scraper import _parse_user_json
 from private_posts_scraper import POST_MEDIA_DOC_ID, IG_APP_ID, _clean_url
-from full_scan_posts import collect_posts, needs_media_detail, post_key
+from full_scan_posts import collect_posts, needs_media_detail, post_key, merge_post
 
 _LOCK = threading.Lock()
 _CACHE = OrderedDict()
@@ -45,21 +45,31 @@ def _html_data(page, username):
     """Read public embedded data and metadata; never infer private followers."""
     soup = BeautifulSoup(page, 'html.parser')
     user, nodes = None, {}
+    documents = []
     for script in soup.find_all('script'):
         try:
             data = json.loads(script.string or script.get_text())
         except (ValueError, TypeError):
             continue
+        documents.append(data)
         for obj in _objects(data):
             if str(obj.get('username', '')).lower() == username:
                 if 'edge_owner_to_timeline_media' in obj or 'is_private' in obj:
-                    user = obj if user is None or 'edge_owner_to_timeline_media' in obj else user
+                    user = merge_post(user or {}, obj)
             owner = obj.get('owner') or obj.get('user') or {}
             if not isinstance(owner, dict):
                 continue
             code = obj.get('shortcode') or obj.get('code')
             if code and str(owner.get('username', '')).lower() == username:
-                nodes[code] = obj
+                nodes[code] = merge_post(nodes.get(code, {}), obj)
+    # Relay timeline owners may expose only an ID, not a username.
+    user_id = str((user or {}).get('id') or (user or {}).get('pk') or '')
+    for data in documents:
+        for obj in _objects(data):
+            owner = obj.get('owner') or obj.get('user') or {}
+            code = obj.get('shortcode') or obj.get('code')
+            if code and user_id and isinstance(owner, dict) and str(owner.get('id') or owner.get('pk') or '') == user_id:
+                nodes[code] = merge_post(nodes.get(code, {}), obj)
     def meta(name):
         tag = soup.find('meta', attrs={'property': name})
         return tag.get('content', '') if tag else ''
@@ -98,33 +108,6 @@ def _media(node, result):
         if vurl and not any(v['url'] == vurl for v in result['video_urls']):
             result['video_urls'].append({'url': vurl, 'thumbnail': url,
                                         'shortcode': node.get('shortcode') or node.get('code', '')})
-
-
-_NON_USERNAMES = frozenset({
-    'p', 'reel', 'reels', 'explore', 'accounts', 'www', 'static', 'i',
-    'api', 'graphql', 'instagram', 'about', 'privacy', 'terms', 'blog',
-    'direct', 'stories', 'highlights', 'channel', 'tv', 'live', 'shop',
-    'threads', 'meta',
-})
-
-
-def _likers_from_html(html, username):
-    """Extract likely liker usernames from post page embedded JSON."""
-    names = set(re.findall(r'"username"\s*:\s*"([a-zA-Z0-9._]+)"', html))
-    names -= _NON_USERNAMES
-    names.discard(username)
-    return sorted(names)[:30]
-
-
-def _fetch_likers(client, media_pk):
-    """Fetch liker usernames for a single post via the media likers API."""
-    response = client.fetch(f'/api/v1/media/{media_pk}/likers/')
-    if response is None:
-        return []
-    try:
-        return [u.get('username') for u in response.json().get('users', []) if u.get('username')]
-    except (ValueError, AttributeError):
-        return []
 
 
 class _Client:
@@ -209,6 +192,7 @@ def run_full_scan(username, budget=55):
         client = _Client(deadline, result['notices'], identity)
         try:
             user, nodes = None, []
+            available_posts = set()
             response = client.fetch(f'/{username}/')
             if response is None and os.environ.get('INSTAGRAM_PROXY'):
                 # Use only the existing configured connection; never rotate exits.
@@ -224,7 +208,7 @@ def run_full_scan(username, budget=55):
                         data = response.json()
                         api_user = data.get('data', {}).get('user') or data.get('user')
                         if api_user:
-                            user = dict(user or {}, **api_user)
+                            user = merge_post(user or {}, api_user)
                     except ValueError:
                         pass
             if user:
@@ -241,6 +225,9 @@ def run_full_scan(username, budget=55):
                 result['profile_info'] = dict(metadata, **info)
                 # collect_posts merges the API timeline with HTML Relay nodes
                 # instead of dropping richer carousel/video data from either.
+            # Keep time for followers/comments/likers instead of spending everything on media.
+            media_deadline = max(time.monotonic(), deadline - min(18, budget * 0.35)) if session_id else deadline
+            client.deadline = media_deadline
             nodes = collect_posts(client, user, nodes, bool(session_id))
             available_posts = set()
             # Preserve every discovered post even when later detail requests
@@ -250,24 +237,13 @@ def run_full_scan(username, budget=55):
                 _media(node, result)
                 if before != (len(result['all_post_urls']), len(result['video_urls'])):
                     available_posts.add(post_key(node))
+            # Parse every discovered post before optional requests hit the deadline.
+            result['post_engagement'] = [entry for node in nodes
+                                         if (entry := parse_engagement(node)) is not None]
             for node in nodes:
                 code = node.get('shortcode') or node.get('code')
                 if not code:
                     continue
-                if any(field in node for field in (
-                    'like_count', 'comment_count', 'edge_media_preview_like', 'edge_media_to_comment',
-                )):
-                    normalized = dict(node, shortcode=code)
-                    if 'like_count' in node:
-                        normalized['edge_media_preview_like'] = {'count': node['like_count']}
-                    if 'comment_count' in node:
-                        normalized['edge_media_to_comment'] = {'count': node['comment_count']}
-                    if isinstance(node.get('caption'), dict):
-                        normalized['edge_media_to_caption'] = {'edges': [{'node': node['caption']}]}
-                    normalized['is_video'] = node.get('is_video', node.get('media_type') == 2)
-                    normalized['taken_at_timestamp'] = node.get('taken_at_timestamp', node.get('taken_at', 0))
-                    normalized['display_url'] = node.get('display_url') or node.get('display_uri') or _best(node.get('image_versions2', {}).get('candidates', [])).get('url', '')
-                    result['post_engagement'].append(_parse_post_node(normalized))
                 if not needs_media_detail(node):
                     continue
                 media_before = (len(result['all_post_urls']), len(result['video_urls']))
@@ -280,7 +256,16 @@ def run_full_scan(username, budget=55):
                     try:
                         items = response.json().get('data', {}).get('xdt_api__v1__media__shortcode__web_info', {}).get('items', [])
                         for item in items:
-                            _media(dict(item, shortcode=code), result)
+                            detailed = merge_post(node, dict(item, shortcode=code))
+                            node.update(detailed)
+                            _media(detailed, result)
+                            detail_entry = parse_engagement(detailed)
+                            if detail_entry:
+                                index = next((i for i, e in enumerate(result['post_engagement']) if e['shortcode'] == code), None)
+                                if index is not None:
+                                    result['post_engagement'][index] = detail_entry
+                                else:
+                                    result['post_engagement'].append(detail_entry)
                     except (ValueError, AttributeError):
                         pass
                 if media_before == (len(result['all_post_urls']), len(result['video_urls'])):
@@ -298,16 +283,9 @@ def run_full_scan(username, budget=55):
                                 if tag:
                                     media_node[field] = tag.get('content', '')
                             _media(media_node, result)
-                    # Also extract liker usernames from the post page HTML
-                    likers = _likers_from_html(response.text, username)
-                    if likers:
-                        for entry in result['post_engagement']:
-                            if entry.get('shortcode') == code and not entry.get('likers'):
-                                entry['likers'] = likers
-                                break
                 if media_before != (len(result['all_post_urls']), len(result['video_urls'])):
                     available_posts.add(post_key(node))
-                if time.monotonic() + 0.5 >= deadline:
+                if time.monotonic() + 0.5 >= media_deadline:
                     result['notices'].append('Scan time limit reached; showing partial results.')
                     break
             expected = (result['profile_info'] or {}).get('posts')
@@ -320,45 +298,18 @@ def run_full_scan(username, budget=55):
             if any(needs_media_detail(node) for node in nodes):
                 result['notices'].append('Some carousel or video details may be incomplete if Instagram denied the media request.')
             result['image_urls'] = list(result['all_post_urls'])
-            if session_id and user and user.get('id') and time.monotonic() + 1 < deadline:
-                response = client.fetch(f'/api/v1/friendships/{user["id"]}/followers/?count=200')
-                if response is not None:
-                    try:
-                        result['follower_usernames'] = [u['username'] for u in response.json().get('users', []) if u.get('username')]
-                    except ValueError:
-                        pass
+            client.deadline = deadline
+            user_id = (user or {}).get('id') or (user or {}).get('pk')
+            if session_id and user_id:
+                client.deadline = min(deadline, time.monotonic() + 5)
+                result['follower_usernames'] = fetch_followers(client, user_id)
+                client.deadline = deadline
             if not result['follower_usernames']:
                 result['notices'].append('Follower list unavailable: requires an authorized Instagram session. Commenters are not counted as followers.')
-            # Enrich engagement entries with liker usernames via API.
-            # The likers endpoint is in the 'api' group; fetching after
-            # followers avoids a 401 cooldown blocking the friendships call.
-            if result['post_engagement'] and time.monotonic() + 1 < deadline:
-                node_by_code = {}
-                for n in nodes:
-                    c = n.get('shortcode') or n.get('code')
-                    if c:
-                        node_by_code[c] = n
-                max_likers = min(12, len(result['post_engagement']))
-                enriched = 0
-                for entry in result['post_engagement'][:max_likers]:
-                    if entry.get('likers'):
-                        enriched += 1
-                        continue
-                    if time.monotonic() + 1 >= deadline:
-                        break
-                    code = entry.get('shortcode', '')
-                    node = node_by_code.get(code, {})
-                    media_pk = node.get('pk') or node.get('id')
-                    if not media_pk:
-                        continue
-                    likers = _fetch_likers(client, media_pk)
-                    if likers:
-                        entry['likers'] = likers[:30]
-                        enriched += 1
-                if enriched:
-                    result['notices'].append(f'Liker usernames extracted for {enriched} of {max_likers} posts.')
-                elif not session_id:
-                    result['notices'].append('Liker usernames require an authorized Instagram session (IG_SESSION_ID).')
+            if session_id:
+                enrich_entries(client, result['post_engagement'], nodes)
+            else:
+                result['notices'].append('Full liker/comment usernames and follower lists require IG_SESSION_ID from an authorized account; embedded public previews may be incomplete.')
             if not nodes:
                 result['notices'].append('No accessible posts returned. Private content requires permission from the account; rate limits cannot be bypassed.')
         except (ValueError, TypeError, AttributeError, KeyError):
@@ -366,9 +317,11 @@ def run_full_scan(username, budget=55):
             result['image_urls'] = list(result['all_post_urls'])
         finally:
             client.session.close()
-        has_data = bool(result['profile_info'] or result['all_post_urls'] or result['video_urls'])
+        has_data = bool(result['all_post_urls'] or result['video_urls'])
+        expected = (result['profile_info'] or {}).get('posts')
+        complete = has_data and isinstance(expected, int) and len(available_posts) >= expected and not any('incomplete' in n or 'partial' in n or 'paused' in n for n in result['notices'])
         # Bound memory and suppress negative-result retry storms as well.
-        _CACHE[key] = (time.monotonic() + (300 if has_data else 60), copy.deepcopy(result))
+        _CACHE[key] = (time.monotonic() + (300 if complete else 60), copy.deepcopy(result))
         _CACHE.move_to_end(key)
         while len(_CACHE) > 128:
             _CACHE.popitem(last=False)
