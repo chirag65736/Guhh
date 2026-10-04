@@ -1048,14 +1048,13 @@ def _strategy_session_api(username, proxies, max_posts):
 def scrape_stealth_profile(username, max_posts=60):
     """
     Scrape Instagram profile using the stealth multi-strategy engine.
-    Runs all curl_cffi strategies IN PARALLEL (ThreadPoolExecutor) for
-    maximum speed, then returns the result from whichever scraper found
-    the MOST posts. Uses early-exit: if any strategy returns >= 10 posts
-    fast, the remaining futures are cancelled.
+    Runs all configured strategies in parallel and returns the result
+    with the MOST posts. A 45-second collection deadline prevents slow
+    strategies from keeping the result request open indefinitely.
 
     Returns dict: {shortcode: image_url, ...}
     """
-    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
 
     username = username.lstrip('@').strip()
     if not username:
@@ -1100,33 +1099,30 @@ def scrape_stealth_profile(username, max_posts=60):
 
     print(f"[*] stealth: launching {len(tasks)} strategies in parallel", flush=True)
 
-    # ── Run all strategies concurrently with early exit ──
-    # If any strategy returns >= 10 posts, we cancel remaining futures
-    # and return immediately — no need to wait for slow strategies.
-    EARLY_EXIT_THRESHOLD = 10
-
-    with ThreadPoolExecutor(max_workers=len(tasks)) as executor:
-        future_map = {}
+    # A context manager would wait for every running future on exit,
+    # even after a timeout/cancel. Explicit non-waiting shutdown keeps
+    # the HTTP response bounded while collecting the best completed result.
+    executor = ThreadPoolExecutor(max_workers=len(tasks))
+    future_map = {}
+    try:
         for name, fn in tasks:
             future_map[executor.submit(fn)] = name
 
-        for future in as_completed(future_map):
-            name = future_map[future]
-            try:
-                urls = future.result()
-            except Exception as e:
-                print(f"[-] stealth: {name} exception: {e}", flush=True)
-                urls = {}
-            if urls:
-                all_results[name] = urls
-                print(f"[+] stealth: {name} → {len(urls)} posts (parallel)", flush=True)
-
-                # Early exit: if we have enough posts, cancel remaining futures
-                if len(urls) >= EARLY_EXIT_THRESHOLD:
-                    print(f"[*] stealth: early exit — {name} returned {len(urls)} posts (>= {EARLY_EXIT_THRESHOLD})", flush=True)
-                    for f in future_map:
-                        f.cancel()
-                    break
+        try:
+            for future in as_completed(future_map, timeout=45):
+                name = future_map[future]
+                try:
+                    urls = future.result()
+                except Exception as e:
+                    print(f"[-] stealth: {name} exception: {e}", flush=True)
+                    urls = {}
+                if urls:
+                    all_results[name] = urls
+                    print(f"[+] stealth: {name} → {len(urls)} posts (parallel)", flush=True)
+        except TimeoutError:
+            print("[-] stealth: scan deadline reached; returning completed results", flush=True)
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
 
     if not all_results:
         print(f"[-] stealth: all strategies failed for @{username}", flush=True)

@@ -1062,7 +1062,7 @@ def scrape_loading_page(user, username, mode='quick'):
 .counter-lbl {{ font-family:'JetBrains Mono',monospace;font-size:.78rem;color:var(--dim);letter-spacing:2px;text-transform:uppercase; }}
 </style>
 <script>
-(function() {{
+document.addEventListener('DOMContentLoaded', function() {{
     var steps = [
         document.getElementById('step1'),
         document.getElementById('step2'),
@@ -1096,7 +1096,7 @@ def scrape_loading_page(user, username, mode='quick'):
     }}, 2500);
 
     // Animate post counter after a delay
-    setTimeout(function() {{
+    var counterDelay = setTimeout(function() {{
         counter.style.display = 'flex';
         var n = 0;
         var cInt = setInterval(function() {{
@@ -1106,10 +1106,17 @@ def scrape_loading_page(user, username, mode='quick'):
         window._cInt = cInt;
     }}, 4000);
 
-    // Fetch the actual scrape result
-    fetch('{api_url}')
-        .then(function(r) {{ return r.text(); }})
+    // Fetch after the loading controls exist, with a bounded wait.
+    var controller = new AbortController();
+    var requestTimeout = setTimeout(function() {{ controller.abort(); }}, {65000 if mode == 'stealth' else 240000});
+    fetch('{api_url}', {{ signal: controller.signal }})
+        .then(function(r) {{
+            if (!r.ok) throw new Error('Server returned ' + r.status);
+            return r.text();
+        }})
         .then(function(html) {{
+            clearTimeout(requestTimeout);
+            clearTimeout(counterDelay);
             clearInterval(stepInterval);
             if (window._cInt) clearInterval(window._cInt);
             // Replace entire page with gallery HTML
@@ -1118,14 +1125,22 @@ def scrape_loading_page(user, username, mode='quick'):
             document.close();
         }})
         .catch(function(err) {{
+            clearTimeout(requestTimeout);
+            clearTimeout(counterDelay);
             clearInterval(stepInterval);
             if (window._cInt) clearInterval(window._cInt);
+            counter.style.display = 'none';
+            document.querySelectorAll('.radar-sweep, .radar-center, .radar-dot').forEach(function(el) {{
+                el.style.animation = 'none';
+            }});
             loadingMsg.style.display = 'none';
             errorMsg.style.display = 'block';
-            errorMsg.textContent = 'Scan failed: ' + err.message;
+            errorMsg.textContent = err.name === 'AbortError'
+                ? 'Scan timed out. Instagram may be rate limiting requests. Please try again later.'
+                : 'Scan failed: ' + err.message;
             backBtn.style.display = 'inline-block';
         }});
-}})();
+}});
 </script>"""
 
     return base_page(f"Cipher · Scanning @{username}", body, user, extra)

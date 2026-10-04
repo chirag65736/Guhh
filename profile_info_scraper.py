@@ -174,7 +174,10 @@ def _try_instaloader(username):
         return None
 
     try:
-        L = instaloader.Instaloader(quiet=True)
+        # Do not sleep for many minutes on Instagram 429 responses.
+        L = instaloader.Instaloader(
+            quiet=True, max_connection_attempts=1, request_timeout=10,
+        )
 
         # Optional: load session
         ig_user = os.environ.get('IG_SESSION_USER', '')
