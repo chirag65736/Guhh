@@ -19,6 +19,7 @@ from curl_cffi import requests
 from post_engagement_scraper import _parse_post_node
 from profile_info_scraper import _parse_user_json
 from private_posts_scraper import POST_MEDIA_DOC_ID, IG_APP_ID, _clean_url
+from full_scan_posts import collect_posts, needs_media_detail, post_key
 
 _LOCK = threading.Lock()
 _CACHE = OrderedDict()
@@ -51,8 +52,8 @@ def _html_data(page, username):
             continue
         for obj in _objects(data):
             if str(obj.get('username', '')).lower() == username:
-                if 'edge_owner_to_timeline_media' in obj:
-                    user = obj
+                if 'edge_owner_to_timeline_media' in obj or 'is_private' in obj:
+                    user = obj if user is None or 'edge_owner_to_timeline_media' in obj else user
             owner = obj.get('owner') or obj.get('user') or {}
             if not isinstance(owner, dict):
                 continue
@@ -89,7 +90,7 @@ def _media(node, result):
                 node.get('edge_sidecar_to_children', {}).get('edges', [])] or [node]
     for item in children:
         image = _best(item.get('image_versions2', {}).get('candidates', []))
-        url = _clean_url(image.get('url') or item.get('display_url') or item.get('thumbnail_src', ''))
+        url = _clean_url(image.get('url') or item.get('display_url') or item.get('display_uri') or item.get('thumbnail_src', ''))
         if url and url not in result['all_post_urls']:
             result['all_post_urls'].append(url)
         video = _best(item.get('video_versions', []))
@@ -189,24 +190,44 @@ def run_full_scan(username, budget=55):
                 response = client.fetch(f'/{username}/')
             if response is not None:
                 user, nodes, result['profile_info'] = _html_data(response.text, username)
-            if user is None:
+            if user is None or 'edge_owner_to_timeline_media' not in user:
                 response = client.fetch(f'/api/v1/users/web_profile_info/?username={username}')
                 if response is not None:
                     try:
                         data = response.json()
-                        user = data.get('data', {}).get('user') or data.get('user')
+                        api_user = data.get('data', {}).get('user') or data.get('user')
+                        if api_user:
+                            user = dict(user or {}, **api_user)
                     except ValueError:
                         pass
             if user:
-                result['profile_info'] = _parse_user_json(user)
-                nodes = [e.get('node', {}) for e in user.get('edge_owner_to_timeline_media', {}).get('edges', [])] or nodes
-            for node in nodes[:20]:
-                media_before = (len(result['all_post_urls']), len(result['video_urls']))
+                info = _parse_user_json(user)
+                metadata = result['profile_info'] or {}
+                # Sparse Relay user objects must not replace real counts with
+                # parser defaults (zero is not the same as unknown).
+                for field, source, alternate in [('posts', 'edge_owner_to_timeline_media', 'media_count'),
+                                                  ('followers', 'edge_followed_by', 'follower_count'),
+                                                  ('following', 'edge_follow', 'following_count')]:
+                    if source not in user:
+                        info[field] = user.get(alternate, metadata.get(field, '?'))
+                info['username'] = user.get('username') or username
+                result['profile_info'] = dict(metadata, **info)
+                # collect_posts merges the API timeline with HTML Relay nodes
+                # instead of dropping richer carousel/video data from either.
+            nodes = collect_posts(client, user, nodes, bool(session_id))
+            available_posts = set()
+            # Preserve every discovered post even when later detail requests
+            # use up the time budget; images and posts are separate counts.
+            for node in nodes:
+                before = (len(result['all_post_urls']), len(result['video_urls']))
                 _media(node, result)
+                if before != (len(result['all_post_urls']), len(result['video_urls'])):
+                    available_posts.add(post_key(node))
+            for node in nodes:
                 code = node.get('shortcode') or node.get('code')
                 if not code:
                     continue
-                if len(result['post_engagement']) < 12 and any(field in node for field in (
+                if any(field in node for field in (
                     'like_count', 'comment_count', 'edge_media_preview_like', 'edge_media_to_comment',
                 )):
                     normalized = dict(node, shortcode=code)
@@ -218,9 +239,12 @@ def run_full_scan(username, budget=55):
                         normalized['edge_media_to_caption'] = {'edges': [{'node': node['caption']}]}
                     normalized['is_video'] = node.get('is_video', node.get('media_type') == 2)
                     normalized['taken_at_timestamp'] = node.get('taken_at_timestamp', node.get('taken_at', 0))
-                    normalized['display_url'] = node.get('display_url') or _best(node.get('image_versions2', {}).get('candidates', [])).get('url', '')
+                    normalized['display_url'] = node.get('display_url') or node.get('display_uri') or _best(node.get('image_versions2', {}).get('candidates', [])).get('url', '')
                     result['post_engagement'].append(_parse_post_node(normalized))
-                # Fetch each post only once for both image AND video tabs.
+                if not needs_media_detail(node):
+                    continue
+                media_before = (len(result['all_post_urls']), len(result['video_urls']))
+                # Fetch only missing carousel/video detail, once for both tabs.
                 response = client.fetch('/graphql/query', method='POST', data={
                     'doc_id': POST_MEDIA_DOC_ID, 'variables': json.dumps({'shortcode': code}),
                     'server_timestamps': 'true',
@@ -247,9 +271,20 @@ def run_full_scan(username, budget=55):
                                 if tag:
                                     media_node[field] = tag.get('content', '')
                             _media(media_node, result)
+                if media_before != (len(result['all_post_urls']), len(result['video_urls'])):
+                    available_posts.add(post_key(node))
                 if time.monotonic() + 0.5 >= deadline:
                     result['notices'].append('Scan time limit reached; showing partial results.')
                     break
+            expected = (result['profile_info'] or {}).get('posts')
+            if isinstance(expected, int):
+                result['notices'].append(f'Available media from {len(available_posts)} of {expected} profile posts ({len(result["all_post_urls"])} images, {len(result["video_urls"])} videos).')
+                if len(available_posts) < expected:
+                    result['notices'].append('Not all posts are accessible. A profile post count does not grant access to private or restricted media.')
+            else:
+                result['notices'].append(f'Available media from {len(available_posts)} posts; the full profile total could not be verified.')
+            if any(needs_media_detail(node) for node in nodes):
+                result['notices'].append('Some carousel or video details may be incomplete if Instagram denied the media request.')
             result['image_urls'] = list(result['all_post_urls'])
             if session_id and user and user.get('id') and time.monotonic() + 1 < deadline:
                 response = client.fetch(f'/api/v1/friendships/{user["id"]}/followers/?count=200')

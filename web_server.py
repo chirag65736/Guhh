@@ -393,8 +393,8 @@ def _generate_combined_html(username, image_urls, profile_info, follower_usernam
                 all_posts_items += f'<div class="gallery-item"><img src="{url}" loading="lazy" alt="post" /><a href="{url}" download class="gallery-dl">⬇</a></div>'
         all_posts_html = f"""
         <div class="result-section" id="section-allposts">
-            <div class="section-header" style="color:#00e5ff;">📸 All Posts — {len(all_post_urls)} Images (GraphQL)</div>
-            <div style="font-size:.78rem;color:var(--dim);margin-bottom:16px;font-style:italic;">Extracted via GraphQL post query — includes all carousel images at highest resolution.</div>
+            <div class="section-header" style="color:#00e5ff;">📸 All Posts — {len(all_post_urls)} Available Images</div>
+            <div style="font-size:.78rem;color:var(--dim);margin-bottom:16px;font-style:italic;">Available timeline and carousel images. Check the scan status above for post coverage and any access restrictions.</div>
             <div class="gallery-grid">{all_posts_items}</div>
         </div>"""
     else:
