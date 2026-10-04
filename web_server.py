@@ -1237,22 +1237,80 @@ class CipherHandler(http.server.BaseHTTPRequestHandler):
                 self._redirect('/dashboard')
                 return
             print(f"[*] Full scan (all-in-one) executing for @{username}", flush=True)
-            # Run all four scrapers
-            print(f"[*]   → Stealth scan for @{username}", flush=True)
-            image_urls = scrape_stealth_profile(username, max_posts=80)
-            print(f"[*]   → Profile info scan for @{username}", flush=True)
-            profile_info = scrape_profile_info(username)
-            print(f"[*]   → Followers list scan for @{username}", flush=True)
-            follower_usernames = scrape_followers(username, max_followers=200)
-            print(f"[*]   → Post engagement scan for @{username}", flush=True)
-            post_engagement = scrape_post_engagement(username, max_posts=12, enrich_comments=True)
-            print(f"[*]   → All posts (GraphQL) scan for @{username}", flush=True)
-            # Reuse shortcodes from post_engagement to avoid duplicate API call
-            engagement_shortcodes = [p.get('shortcode') for p in post_engagement if p.get('shortcode')]
-            all_post_urls = scrape_private_posts(username, max_posts=20, shortcodes=engagement_shortcodes)
-            print(f"[*]   → Videos (GraphQL) scan for @{username}", flush=True)
-            video_urls = scrape_private_videos(username, max_posts=30, shortcodes=engagement_shortcodes)
-            html = _generate_combined_html(username, image_urls, profile_info, follower_usernames, post_engagement, all_post_urls, video_urls)
+            # Run all scrapers IN PARALLEL to stay within the loading-page timeout.
+            # Post-engagement enrichment (Playwright, ~8 posts × 23s) is disabled in
+            # Full Scan to avoid blowing the deadline; like/comment counts still come
+            # from the API.
+            from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
+
+            results = {
+                'image_urls': {},
+                'profile_info': None,
+                'follower_usernames': [],
+                'post_engagement': [],
+                'all_post_urls': [],
+                'video_urls': [],
+            }
+
+            def _run_stealth():
+                print(f"[*]   → Stealth scan for @{username}", flush=True)
+                return scrape_stealth_profile(username, max_posts=80)
+
+            def _run_profile_info():
+                print(f"[*]   → Profile info scan for @{username}", flush=True)
+                return scrape_profile_info(username)
+
+            def _run_followers():
+                print(f"[*]   → Followers list scan for @{username}", flush=True)
+                return scrape_followers(username, max_followers=200)
+
+            def _run_engagement():
+                print(f"[*]   → Post engagement scan for @{username}", flush=True)
+                return scrape_post_engagement(username, max_posts=12, enrich_comments=False)
+
+            def _run_all_posts():
+                print(f"[*]   → All posts (GraphQL) scan for @{username}", flush=True)
+                return scrape_private_posts(username, max_posts=20)
+
+            def _run_videos():
+                print(f"[*]   → Videos (GraphQL) scan for @{username}", flush=True)
+                return scrape_private_videos(username, max_posts=30)
+
+            tasks = {
+                'image_urls': _run_stealth,
+                'profile_info': _run_profile_info,
+                'follower_usernames': _run_followers,
+                'post_engagement': _run_engagement,
+                'all_post_urls': _run_all_posts,
+                'video_urls': _run_videos,
+            }
+
+            executor = ThreadPoolExecutor(max_workers=len(tasks))
+            future_map = {}
+            try:
+                for key, fn in tasks.items():
+                    future_map[executor.submit(fn)] = key
+                try:
+                    for future in as_completed(future_map, timeout=55):
+                        key = future_map[future]
+                        try:
+                            results[key] = future.result()
+                        except Exception as e:
+                            print(f"[-] full_scan: {key} exception: {e}", flush=True)
+                except TimeoutError:
+                    print("[-] full_scan: parallel deadline reached; using completed results", flush=True)
+            finally:
+                executor.shutdown(wait=False, cancel_futures=True)
+
+            html = _generate_combined_html(
+                username,
+                results['image_urls'],
+                results['profile_info'],
+                results['follower_usernames'],
+                results['post_engagement'],
+                results['all_post_urls'],
+                results['video_urls'],
+            )
             html = inject_back_button(html)
             self._serve_html(html)
             return

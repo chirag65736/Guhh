@@ -1108,7 +1108,7 @@ document.addEventListener('DOMContentLoaded', function() {{
 
     // Fetch after the loading controls exist, with a bounded wait.
     var controller = new AbortController();
-    var requestTimeout = setTimeout(function() {{ controller.abort(); }}, {65000 if mode == 'stealth' else 240000});
+    var requestTimeout = setTimeout(function() {{ controller.abort(); }}, {65000 if mode == 'stealth' else 90000 if mode == 'all' else 240000});
     fetch('{api_url}', {{ signal: controller.signal }})
         .then(function(r) {{
             if (!r.ok) throw new Error('Server returned ' + r.status);

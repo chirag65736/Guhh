@@ -83,7 +83,8 @@ SQLite DB persists in a named Docker volume (`cipher_data`).
 - Costs 3 credits per scan, finds up to 80 posts.
 - Route: /scrape-stealth (deducts 3 credits) → /scrape-stealth-result (executes scrape)
 - Strategies run concurrently with a 45-second collection deadline; return the largest completed result. Executor shutdown must use `wait=False`: a context manager waits for running strategies even after cancellation.
-- Loading-page scripts are emitted in the document head: initialize controls inside `DOMContentLoaded`, not a head-level IIFE. Stealth requests time out after 65 seconds with a visible error/back button (other scans: 240 seconds).
+- Loading-page scripts are emitted in the document head: initialize controls inside `DOMContentLoaded`, not a head-level IIFE. Stealth requests time out after 65 seconds, Full Scan after 90 seconds, other scans after 240 seconds — each with a visible error/back button.
+- Full Scan (`/scrape-all-result`) runs all 6 scrapers IN PARALLEL via ThreadPoolExecutor with a 55-second collection deadline. Post-engagement Playwright enrichment is disabled in Full Scan (like/comment counts still come from the API). Executor shutdown uses `wait=False, cancel_futures=True`.
 - Profile-info Instaloader uses one connection attempt and a 10-second request timeout; default 429 retries otherwise sleep for many minutes and block Full Scan.
 - Optional env vars: IG_SESSION_USER, IG_SESSION_PASS, IG_SESSION_ID
 
