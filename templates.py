@@ -867,6 +867,13 @@ def dashboard_page(user, flash=None, reviews=None):
                 <button type="submit" class="btn btn-outline" style="border-color:#7c3aed;color:#7c3aed;">👥 Followers List</button>
             </form>
         </div>
+        <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--line);">
+            <p style="color:var(--dim);font-size:.78rem;margin-bottom:12px;">⚡ <b style="background:linear-gradient(90deg,var(--gold),#7c3aed);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;">Full Scan (All-in-One)</b> — runs <b>Stealth Scan + Profile Info + Followers List</b> together and shows <b>ALL results on one page</b>. <b style="color:var(--gold);">6 credits</b> per scan.</p>
+            <form action="/scrape-all" method="get" style="display:flex;gap:12px;flex-wrap:wrap;">
+                <input type="text" name="username" placeholder="Instagram username..." required style="flex:1;min-width:200px;" autocomplete="off">
+                <button type="submit" class="btn btn-primary" style="background:linear-gradient(135deg,var(--gold),#7c3aed);">⚡ Full Scan</button>
+            </form>
+        </div>
     </div>"""
 
     # Per-post payment
@@ -945,6 +952,11 @@ def scrape_loading_page(user, username, mode='quick'):
         mode_label = 'Followers List Scan'
         mode_color = '#7c3aed'
         mode_icon = '👥'
+    elif mode == 'all':
+        api_url = f"/scrape-all-result?username={urllib.parse.quote(username)}"
+        mode_label = 'Full Scan (All-in-One)'
+        mode_color = 'var(--gold)'
+        mode_icon = '⚡'
     else:
         api_url = f"/scrape-private-result?username={urllib.parse.quote(username)}"
         mode_label = 'Private Deep Scan'

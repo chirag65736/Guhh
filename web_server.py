@@ -217,6 +217,288 @@ from profile_info_scraper import scrape_profile_info
 from followers_scraper import scrape_followers
 
 
+def _generate_combined_html(username, image_urls, profile_info, follower_usernames):
+    """Generate a single page showing ALL scan results: stealth gallery,
+    profile info, and followers list — combined into one page."""
+    # ── Profile Info section ──
+    info_html = ''
+    if profile_info:
+        followers = profile_info.get('followers', '?')
+        following = profile_info.get('following', '?')
+        posts = profile_info.get('posts', '?')
+        full_name = profile_info.get('full_name', '')
+        bio = profile_info.get('bio', '')
+        profile_pic = profile_info.get('profile_pic_url', '')
+        is_private = profile_info.get('is_private', False)
+        is_verified = profile_info.get('is_verified', False)
+        private_badge = '🔒 Private' if is_private else '🌐 Public'
+        verified_badge = ' ✓' if is_verified else ''
+        pic_html = f'<img src="{profile_pic}" alt="Profile" style="width:80px;height:80px;border-radius:50%;border:2px solid #00e5ff;object-fit:cover;" />' if profile_pic else ''
+        bio_html = f'<div style="font-size:.82rem;color:var(--dim);margin-top:8px;font-style:italic;">{bio}</div>' if bio else ''
+        info_html = f"""
+        <div class="result-section" id="section-info">
+            <div class="section-header" style="color:#00ff9c;">🔍 Profile Info</div>
+            <div class="info-card">
+                <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;justify-content:center;">
+                    {pic_html}
+                    <div>
+                        <div style="font-family:'JetBrains Mono',monospace;font-size:1.1rem;font-weight:700;color:var(--text);">{full_name}{verified_badge}</div>
+                        <div style="font-family:'JetBrains Mono',monospace;font-size:.85rem;color:var(--cyan);">@{username}</div>
+                        <div style="font-size:.72rem;color:{'#ff2bd6' if is_private else '#00ff9c'};margin-top:4px;">{private_badge}</div>
+                    </div>
+                </div>
+                {bio_html}
+                <div class="mini-stats">
+                    <div class="mini-stat"><span class="mini-num">{followers:,}</span><span class="mini-lbl">Followers</span></div>
+                    <div class="mini-stat"><span class="mini-num">{following:,}</span><span class="mini-lbl">Following</span></div>
+                    <div class="mini-stat"><span class="mini-num">{posts:,}</span><span class="mini-lbl">Posts</span></div>
+                </div>
+            </div>
+        </div>"""
+    else:
+        info_html = """
+        <div class="result-section" id="section-info">
+            <div class="section-header" style="color:#00ff9c;">🔍 Profile Info</div>
+            <div class="result-empty">⚠ Could not extract profile info.</div>
+        </div>"""
+
+    # ── Stealth gallery section ──
+    if image_urls:
+        gallery_items = ''
+        for url in image_urls:
+            gallery_items += f'<div class="gallery-item"><img src="{url}" loading="lazy" alt="post" /><a href="{url}" download class="gallery-dl">⬇</a></div>'
+        gallery_html = f"""
+        <div class="result-section" id="section-stealth">
+            <div class="section-header" style="color:var(--gold);">🛡 Stealth Scan — {len(image_urls)} Posts</div>
+            <div class="gallery-grid">{gallery_items}</div>
+        </div>"""
+    else:
+        gallery_html = """
+        <div class="result-section" id="section-stealth">
+            <div class="section-header" style="color:var(--gold);">🛡 Stealth Scan</div>
+            <div class="result-empty">⚠ No posts found via stealth scan.</div>
+        </div>"""
+
+    # ── Followers list section ──
+    if follower_usernames:
+        follower_items = ''
+        for i, uname in enumerate(follower_usernames, 1):
+            follower_items += f'<a href="https://www.instagram.com/{uname}/" target="_blank" class="follower-item"><span class="follower-num">{i}</span><span class="follower-avatar">{uname[0].upper() if uname else "?"}</span><span class="follower-username">@{uname}</span><span class="follower-arrow">→</span></a>'
+        followers_html = f"""
+        <div class="result-section" id="section-followers">
+            <div class="section-header" style="color:#7c3aed;">👥 Followers List — {len(follower_usernames)} Found</div>
+            <div class="followers-list">{follower_items}</div>
+        </div>"""
+    else:
+        followers_html = """
+        <div class="result-section" id="section-followers">
+            <div class="section-header" style="color:#7c3aed;">👥 Followers List</div>
+            <div class="result-empty">⚠ Could not extract followers list.</div>
+        </div>"""
+
+    return f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cɪᴘʜᴇʀ · Full Scan — @{username}</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        * {{ margin:0; padding:0; box-sizing:border-box; }}
+        :root {{
+            --bg-0:#05060a; --bg-1:#0a0d14; --bg-2:#111624;
+            --line:rgba(0,255,255,.15); --cyan:#00e5ff; --magenta:#ff2bd6;
+            --green:#00ff9c; --gold:#ffd700; --text:#e6f1ff; --dim:#7a8aa3;
+        }}
+        body {{
+            font-family:'Inter',sans-serif; background:var(--bg-0); color:var(--text);
+            min-height:100vh; padding:24px 18px; font-weight:bold; font-style:italic;
+            background-image:radial-gradient(circle at 15% 10%,rgba(0,229,255,.10),transparent 45%),radial-gradient(circle at 85% 90%,rgba(255,43,214,.10),transparent 45%),linear-gradient(180deg,#05060a 0%,#0a0d14 100%);
+            background-attachment:fixed;
+        }}
+        body::before {{
+            content:''; position:fixed; inset:0;
+            background-image:linear-gradient(rgba(0,229,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,255,.035) 1px,transparent 1px);
+            background-size:40px 40px; pointer-events:none; z-index:0;
+        }}
+        .container {{
+            position:relative; z-index:1; max-width:900px; margin:0 auto;
+        }}
+        .header {{ text-align:center; margin-bottom:28px; }}
+        .brand {{
+            font-family:'JetBrains Mono',monospace; font-size:2.2rem; font-weight:800;
+            letter-spacing:4px; background:linear-gradient(90deg,var(--cyan),var(--magenta));
+            -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
+            text-shadow:0 0 40px rgba(0,229,255,.35); margin-bottom:6px;
+        }}
+        .brand-sub {{
+            font-family:'JetBrains Mono',monospace; font-size:.72rem; color:var(--dim);
+            letter-spacing:6px; text-transform:uppercase; margin-bottom:12px;
+        }}
+        .target-box {{
+            display:inline-flex; align-items:center; gap:10px;
+            padding:10px 24px; border-radius:30px;
+            background:linear-gradient(135deg,rgba(0,229,255,.06),rgba(255,43,214,.06));
+            border:1px solid var(--line);
+        }}
+        .target-box .label {{ font-family:'JetBrains Mono',monospace; font-size:.72rem; color:var(--dim); letter-spacing:1px; }}
+        .target-box .name {{ font-family:'JetBrains Mono',monospace; font-size:.95rem; color:var(--cyan); font-weight:700; }}
+        /* Tab navigation */
+        .tabs {{
+            display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin-bottom:24px;
+            position:sticky; top:0; z-index:10; padding:12px 0;
+            background:rgba(5,6,10,.85); backdrop-filter:blur(10px); border-radius:12px;
+            border:1px solid var(--line);
+        }}
+        .tab {{
+            font-family:'JetBrains Mono',monospace; font-size:.78rem; font-weight:700;
+            padding:10px 20px; border-radius:10px; cursor:pointer;
+            border:1px solid var(--line); background:rgba(10,13,20,.6);
+            color:var(--dim); transition:all .25s; letter-spacing:1px;
+        }}
+        .tab:hover {{ color:var(--text); border-color:var(--cyan); }}
+        .tab.active {{ color:#05060a; font-weight:800; }}
+        .tab.active[data-tab="info"] {{ background:#00ff9c; border-color:#00ff9c; }}
+        .tab.active[data-tab="stealth"] {{ background:var(--gold); border-color:var(--gold); }}
+        .tab.active[data-tab="followers"] {{ background:#7c3aed; border-color:#7c3aed; color:#fff; }}
+        /* Result sections */
+        .result-section {{
+            background:rgba(10,13,20,.75); border:1px solid var(--line); border-radius:18px;
+            padding:28px 24px; margin-bottom:24px; backdrop-filter:blur(14px);
+            box-shadow:0 0 0 1px rgba(0,229,255,.05),0 20px 60px rgba(0,0,0,.5);
+        }}
+        .result-section.hidden {{ display:none; }}
+        .section-header {{
+            font-family:'JetBrains Mono',monospace; font-size:1.1rem; font-weight:800;
+            letter-spacing:2px; margin-bottom:20px; padding-bottom:12px;
+            border-bottom:1px solid var(--line);
+        }}
+        .result-empty {{
+            text-align:center; padding:30px; color:var(--dim); font-size:.88rem;
+            background:rgba(5,6,10,.5); border-radius:12px;
+        }}
+        /* Profile info card */
+        .info-card {{
+            text-align:center; padding:24px 16px;
+            background:linear-gradient(135deg,rgba(0,229,255,.04),rgba(255,43,214,.04));
+            border:1px solid var(--line); border-radius:14px;
+        }}
+        .mini-stats {{
+            display:flex; justify-content:center; gap:30px; margin-top:20px; flex-wrap:wrap;
+        }}
+        .mini-stat {{ display:flex; flex-direction:column; align-items:center; gap:4px; }}
+        .mini-num {{ font-family:'JetBrains Mono',monospace; font-size:1.6rem; font-weight:800; color:var(--cyan); }}
+        .mini-lbl {{ font-family:'JetBrains Mono',monospace; font-size:.68rem; color:var(--dim); letter-spacing:2px; text-transform:uppercase; }}
+        /* Gallery grid */
+        .gallery-grid {{
+            display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:14px;
+        }}
+        .gallery-item {{
+            position:relative; border-radius:12px; overflow:hidden;
+            border:1px solid var(--line); aspect-ratio:1; background:var(--bg-1);
+        }}
+        .gallery-item img {{ width:100%; height:100%; object-fit:cover; display:block; transition:transform .3s; }}
+        .gallery-item:hover img {{ transform:scale(1.05); }}
+        .gallery-dl {{
+            position:absolute; bottom:8px; right:8px; width:32px; height:32px;
+            border-radius:50%; background:rgba(0,229,255,.9); color:#05060a;
+            display:flex; align-items:center; justify-content:center;
+            text-decoration:none; font-size:1rem; font-weight:800;
+            opacity:0; transition:opacity .25s;
+        }}
+        .gallery-item:hover .gallery-dl {{ opacity:1; }}
+        /* Followers list */
+        .followers-list {{
+            display:flex; flex-direction:column; gap:8px; max-height:500px; overflow-y:auto; padding-right:4px;
+        }}
+        .followers-list::-webkit-scrollbar {{ width:6px; }}
+        .followers-list::-webkit-scrollbar-track {{ background:rgba(0,229,255,.05); border-radius:3px; }}
+        .followers-list::-webkit-scrollbar-thumb {{ background:rgba(0,229,255,.3); border-radius:3px; }}
+        .follower-item {{
+            display:flex; align-items:center; gap:12px; padding:12px 16px;
+            border-radius:12px; text-decoration:none; color:var(--text);
+            background:rgba(5,6,10,.5); border:1px solid rgba(0,229,255,.08);
+            transition:all .25s;
+        }}
+        .follower-item:hover {{ border-color:var(--cyan); background:rgba(0,229,255,.06); transform:translateX(4px); }}
+        .follower-num {{ font-family:'JetBrains Mono',monospace; font-size:.72rem; color:var(--dim); min-width:28px; text-align:right; }}
+        .follower-avatar {{
+            width:36px; height:36px; border-radius:50%; flex-shrink:0;
+            display:flex; align-items:center; justify-content:center;
+            font-family:'JetBrains Mono',monospace; font-size:.85rem; font-weight:800;
+            color:#05060a; background:linear-gradient(135deg,var(--cyan),var(--magenta));
+        }}
+        .follower-username {{ font-family:'JetBrains Mono',monospace; font-size:.9rem; color:var(--text); font-weight:600; flex:1; }}
+        .follower-arrow {{ color:var(--dim); font-size:1.1rem; transition:color .25s; }}
+        .follower-item:hover .follower-arrow {{ color:var(--cyan); }}
+        /* Footer */
+        .footer {{
+            text-align:center; margin-top:30px; padding-top:20px;
+            border-top:1px solid var(--line); color:var(--dim); font-size:.82rem;
+        }}
+        .footer .brand-mini {{ font-family:'JetBrains Mono',monospace; color:var(--cyan); letter-spacing:3px; font-weight:700; margin-bottom:6px; }}
+        .footer .made {{ font-family:'JetBrains Mono',monospace; font-size:.72rem; color:var(--magenta); margin-top:4px; letter-spacing:1px; }}
+        @media(max-width:600px) {{
+            .container {{ padding:0; }}
+            .gallery-grid {{ grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:10px; }}
+            .mini-stats {{ gap:20px; }}
+            .mini-num {{ font-size:1.3rem; }}
+            .tab {{ font-size:.72rem; padding:8px 14px; }}
+            .follower-item {{ padding:10px 12px; gap:8px; }}
+            .follower-avatar {{ width:32px; height:32px; font-size:.78rem; }}
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="brand">Cɪᴘʜᴇʀ</div>
+            <div class="brand-sub">Full Scan — All Results</div>
+            <div style="margin-top:16px;">
+                <div class="target-box">
+                    <span class="label">Target:</span>
+                    <span class="name">@{username}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab navigation -->
+        <div class="tabs">
+            <div class="tab active" data-tab="info" onclick="showTab('info')">🔍 Profile Info</div>
+            <div class="tab" data-tab="stealth" onclick="showTab('stealth')">🛡 Stealth ({len(image_urls) if image_urls else 0})</div>
+            <div class="tab" data-tab="followers" onclick="showTab('followers')">👥 Followers ({len(follower_usernames) if follower_usernames else 0})</div>
+        </div>
+
+        {info_html}
+        {gallery_html}
+        {followers_html}
+
+        <div class="footer">
+            <div class="brand-mini">Cɪᴘʜᴇʀ</div>
+            <div>Full Scan — All-in-One Intelligence</div>
+            <div class="made">◈ Made by Ryon · CipherXPortal ◈</div>
+        </div>
+    </div>
+    <script>
+    function showTab(tab) {{
+        document.querySelectorAll('.tab').forEach(function(t) {{ t.classList.remove('active'); }});
+        document.querySelector('.tab[data-tab="' + tab + '"]').classList.add('active');
+        document.querySelectorAll('.result-section').forEach(function(s) {{ s.classList.add('hidden'); }});
+        document.getElementById('section-' + tab).classList.remove('hidden');
+        window.scrollTo({{ top: 0, behavior: 'smooth' }});
+    }}
+    // Show only the active section initially
+    document.addEventListener('DOMContentLoaded', function() {{
+        document.querySelectorAll('.result-section').forEach(function(s) {{ s.classList.add('hidden'); }});
+        document.getElementById('section-info').classList.remove('hidden');
+    }});
+    </script>
+</body>
+</html>
+    """
+
+
 def _generate_followers_html(usernames, target_username):
     """Generate HTML page showing a list of follower usernames."""
     count = len(usernames)
@@ -597,6 +879,43 @@ class CipherHandler(http.server.BaseHTTPRequestHandler):
                 html = generate_unsuccessful_html(username)
             else:
                 html = generate_gallery_html(image_urls, username)
+            html = inject_back_button(html)
+            self._serve_html(html)
+            return
+
+        if path == '/scrape-all':
+            if not user:
+                self._redirect('/login')
+                return
+            username = params.get('username', [''])[0].strip()
+            if not username:
+                self._redirect('/dashboard')
+                return
+            if not db.deduct_credits(user['id'], 6):
+                self._redirect('/dashboard?flash=error:' + urllib.parse.quote('Need 6 credits for Full Scan! Buy credits first.'))
+                return
+            print(f"[*] Full scan (all-in-one) requested for @{username} by {user['email']}", flush=True)
+            db.log_activity(user['id'], 'search', f'{username} (full-all)')
+            self._serve_html(scrape_loading_page(user, username, mode='all'))
+            return
+
+        if path == '/scrape-all-result':
+            if not user:
+                self._redirect('/login')
+                return
+            username = params.get('username', [''])[0].strip()
+            if not username:
+                self._redirect('/dashboard')
+                return
+            print(f"[*] Full scan (all-in-one) executing for @{username}", flush=True)
+            # Run all three scrapers
+            print(f"[*]   → Stealth scan for @{username}", flush=True)
+            image_urls = scrape_stealth_profile(username, max_posts=80)
+            print(f"[*]   → Profile info scan for @{username}", flush=True)
+            profile_info = scrape_profile_info(username)
+            print(f"[*]   → Followers list scan for @{username}", flush=True)
+            follower_usernames = scrape_followers(username, max_followers=200)
+            html = _generate_combined_html(username, image_urls, profile_info, follower_usernames)
             html = inject_back_button(html)
             self._serve_html(html)
             return
