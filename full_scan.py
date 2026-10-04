@@ -70,6 +70,31 @@ def _html_data(page, username):
             code = obj.get('shortcode') or obj.get('code')
             if code and user_id and isinstance(owner, dict) and str(owner.get('id') or owner.get('pk') or '') == user_id:
                 nodes[code] = merge_post(nodes.get(code, {}), obj)
+    # Extract posts from polaris_ordered_timeline_connection (current Relay format).
+    # Post nodes in this structure have 'code' and 'display_uri' but no 'owner'
+    # field, so the username/ID matching above misses them.
+    for data in documents:
+        for obj in _objects(data):
+            if not isinstance(obj, dict):
+                continue
+            conn = obj.get('polaris_ordered_timeline_connection')
+            if not isinstance(conn, dict):
+                continue
+            for edge in conn.get('edges', []):
+                node = edge.get('node', {}) if isinstance(edge, dict) else {}
+                code = node.get('code') or node.get('shortcode')
+                if code:
+                    nodes[code] = merge_post(nodes.get(code, {}), node)
+            # Map to edge_owner_to_timeline_media so collect_posts can paginate
+            # and the web_profile_info API fallback is skipped.
+            if user is not None and 'edge_owner_to_timeline_media' not in user:
+                user = merge_post(user, {
+                    'edge_owner_to_timeline_media': {
+                        'count': conn.get('count', 0),
+                        'edges': conn.get('edges', []),
+                        'page_info': conn.get('page_info', {}),
+                    },
+                })
     def meta(name):
         tag = soup.find('meta', attrs={'property': name})
         return tag.get('content', '') if tag else ''
@@ -97,13 +122,13 @@ def _best(versions):
 
 def _media(node, result):
     children = node.get('carousel_media') or [e.get('node', {}) for e in
-                node.get('edge_sidecar_to_children', {}).get('edges', [])] or [node]
+                (node.get('edge_sidecar_to_children') or {}).get('edges', [])] or [node]
     for item in children:
-        image = _best(item.get('image_versions2', {}).get('candidates', []))
+        image = _best((item.get('image_versions2') or {}).get('candidates', []))
         url = _clean_url(image.get('url') or item.get('display_url') or item.get('display_uri') or item.get('thumbnail_src', ''))
         if url and url not in result['all_post_urls']:
             result['all_post_urls'].append(url)
-        video = _best(item.get('video_versions', []))
+        video = _best(item.get('video_versions') or [])
         vurl = _clean_url(video.get('url') or item.get('video_url', ''))
         if vurl and not any(v['url'] == vurl for v in result['video_urls']):
             result['video_urls'].append({'url': vurl, 'thumbnail': url,
@@ -219,8 +244,8 @@ def run_full_scan(username, budget=55):
                 for field, source, alternate in [('posts', 'edge_owner_to_timeline_media', 'media_count'),
                                                   ('followers', 'edge_followed_by', 'follower_count'),
                                                   ('following', 'edge_follow', 'following_count')]:
-                    if source not in user:
-                        info[field] = user.get(alternate, metadata.get(field, '?'))
+                    if source not in user or not info.get(field):
+                        info[field] = user.get(alternate) or metadata.get(field, info.get(field) or '?')
                 info['username'] = user.get('username') or username
                 result['profile_info'] = dict(metadata, **info)
                 # collect_posts merges the API timeline with HTML Relay nodes
@@ -249,7 +274,10 @@ def run_full_scan(username, budget=55):
                 media_before = (len(result['all_post_urls']), len(result['video_urls']))
                 # Fetch only missing carousel/video detail, once for both tabs.
                 response = client.fetch('/graphql/query', method='POST', data={
-                    'doc_id': POST_MEDIA_DOC_ID, 'variables': json.dumps({'shortcode': code}),
+                    'doc_id': POST_MEDIA_DOC_ID, 'variables': json.dumps({
+                        'shortcode': code,
+                        '__relay_internal__pv__PolarisAIGMMediaWebLabelEnabledrelayprovider': False,
+                    }, separators=(',', ':')),
                     'server_timestamps': 'true',
                 })
                 if response is not None:
