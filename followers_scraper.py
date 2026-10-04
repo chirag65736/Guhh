@@ -422,6 +422,169 @@ def _strategy_graphql(username, proxies, max_followers):
 
 
 # ═══════════════════════════════════════════════════════════════════════
+#  Strategy 4 — Post-page username extraction (NO login needed, works
+#  for PRIVATE accounts). Uses web_profile_info API to get post shortcodes,
+#  then loads each post page with Playwright to extract usernames from
+#  embedded JSON (likers, commenters, tagged users). These usernames are
+#  very likely followers of the target account.
+# ═══════════════════════════════════════════════════════════════════════
+
+# Non-username strings that appear in Instagram HTML /profile/ links
+_NON_USERNAMES = {
+    'p', 'reel', 'reels', 'explore', 'accounts', 'www', 'static', 'i',
+    'api', 'graphql', 'instagram', 'about', 'privacy', 'terms', 'blog',
+    'rsrc.php', 'v', 'popular', 'direct', 'stories', 'highlights',
+    'channel', 'tv', 'live', 'shop', 'threads', 'meta',
+}
+
+
+def _strategy_post_pages(username, max_followers):
+    """Extract usernames from post pages via web_profile_info + Playwright.
+
+    Works for BOTH public and private accounts without any Instagram login.
+    The web_profile_info API returns post shortcodes even for private accounts.
+    Each post page contains embedded JSON with usernames of likers,
+    commenters, and tagged users — all of whom are very likely followers.
+    """
+    try:
+        from curl_cffi import requests as cffi_req
+    except ImportError:
+        print("[-] followers: post_pages — curl_cffi not installed, skipping", flush=True)
+        return []
+
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        print("[-] followers: post_pages — playwright not installed, skipping", flush=True)
+        return []
+
+    # Step 1: Get post shortcodes from web_profile_info API (direct connection)
+    try:
+        r = cffi_req.get(
+            f'https://www.instagram.com/api/v1/users/web_profile_info/?username={username}',
+            impersonate='chrome',
+            headers={
+                'x-ig-app-id': IG_APP_ID,
+                'x-requested-with': 'XMLHttpRequest',
+                'accept': '*/*',
+                'referer': f'https://www.instagram.com/{username}/',
+            },
+            timeout=15,
+        )
+        if r.status_code != 200:
+            print(f"[-] followers: post_pages — web_profile_info → {r.status_code}", flush=True)
+            return []
+
+        data = r.json()
+        user = data.get('data', {}).get('user', {})
+        if not user:
+            print("[-] followers: post_pages — no user data in response", flush=True)
+            return []
+
+        is_private = user.get('is_private', False)
+        follower_count = user.get('edge_followed_by', {}).get('count', 0)
+        print(f"[*] followers: post_pages — account is {'private' if is_private else 'public'}, "
+              f"{follower_count} followers", flush=True)
+
+        # Get post shortcodes from timeline media
+        media = user.get('edge_owner_to_timeline_media', {})
+        edges = media.get('edges', [])
+        shortcodes = []
+        for e in edges:
+            node = e.get('node', {})
+            sc = node.get('shortcode')
+            if sc:
+                shortcodes.append(sc)
+
+        if not shortcodes:
+            print("[-] followers: post_pages — no posts found in profile data", flush=True)
+            return []
+
+        print(f"[*] followers: post_pages — found {len(shortcodes)} posts to scan", flush=True)
+
+    except Exception as e:
+        print(f"[-] followers: post_pages — API error: {e}", flush=True)
+        return []
+
+    # Step 2: Load each post page with Playwright and extract usernames
+    all_usernames = set()
+
+    try:
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(headless=True, args=[
+                '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage',
+                '--disable-blink-features=AutomationControlled',
+            ])
+            context = browser.new_context(
+                user_agent='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 '
+                           '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                viewport={'width': 1280, 'height': 900},
+                locale='en-US',
+            )
+            context.add_init_script('''
+                Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+                window.chrome = { runtime: {} };
+            ''')
+
+            for i, sc in enumerate(shortcodes):
+                page = context.new_page()
+                url = f'https://www.instagram.com/p/{sc}/'
+                print(f"[*] followers: post_pages — loading post {i+1}/{len(shortcodes)}: {sc}", flush=True)
+
+                try:
+                    resp = page.goto(url, timeout=20000, wait_until='domcontentloaded')
+                    page.wait_for_timeout(3000)
+
+                    final_url = page.url
+                    if 'login' in final_url or 'accounts/login' in final_url:
+                        print(f"  [-] redirected to login, skipping", flush=True)
+                        page.close()
+                        continue
+
+                    html = page.content()
+
+                    # Extract all usernames from embedded JSON
+                    found = set(re.findall(r'"username"\s*:\s*"([a-zA-Z0-9._]+)"', html))
+                    # Also extract from profile links
+                    found.update(re.findall(r'instagram\.com/([a-zA-Z0-9._]+)/', html))
+
+                    # Filter out non-usernames and the target
+                    found -= _NON_USERNAMES
+                    found.discard(username)
+
+                    new = found - all_usernames
+                    if new:
+                        print(f"  [+] found {len(new)} new usernames (total: {len(all_usernames) + len(new)})", flush=True)
+                    else:
+                        print(f"  [-] no new usernames (total: {len(all_usernames)})", flush=True)
+
+                    all_usernames.update(found)
+
+                    if len(all_usernames) >= max_followers:
+                        print(f"  [*] reached max_followers limit, stopping", flush=True)
+                        page.close()
+                        break
+
+                except Exception as e:
+                    print(f"  [-] error loading post: {e}", flush=True)
+
+                page.close()
+
+            browser.close()
+
+    except Exception as e:
+        print(f"[-] followers: post_pages — playwright error: {e}", flush=True)
+
+    # Convert to sorted list
+    usernames = sorted(all_usernames)
+    if len(usernames) > max_followers:
+        usernames = usernames[:max_followers]
+
+    print(f"[✓] followers: post_pages → {len(usernames)} usernames", flush=True)
+    return usernames
+
+
+# ═══════════════════════════════════════════════════════════════════════
 #  Main entry point
 # ═══════════════════════════════════════════════════════════════════════
 
@@ -453,6 +616,17 @@ def scrape_followers(username, max_followers=200):
     if all_results and max(len(v) for v in all_results.values()) >= 5:
         best = max(all_results, key=lambda k: len(all_results[k]))
         print(f"[✓] followers: playwright got {len(all_results[best])} — skipping API strategies", flush=True)
+        return all_results[best]
+
+    # Strategy 4: Post-page username extraction (works for PRIVATE accounts without login)
+    names = _strategy_post_pages(username, max_followers)
+    if names:
+        all_results['post_pages'] = names
+
+    # If post-page strategy found enough, return early
+    if all_results and max(len(v) for v in all_results.values()) >= 5:
+        best = max(all_results, key=lambda k: len(all_results[k]))
+        print(f"[✓] followers: post_pages got {len(all_results[best])} — skipping API strategies", flush=True)
         return all_results[best]
 
     # ── Try direct first, then Tor ──

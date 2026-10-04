@@ -100,9 +100,14 @@ SQLite DB persists in a named Docker volume (`cipher_data`).
   picuki.com/followers/{username}, a public IG viewer that shows follower lists
   without Instagram login. Playwright handles Cloudflare's JS challenge automatically.
   Returns ~30 usernames per scan. Works for PUBLIC accounts without any credentials.
+- **Post-page strategy (works for PRIVATE accounts without login!)**: uses the
+  web_profile_info API (direct connection, no auth needed) to get post shortcodes,
+  then loads each post page with Playwright to extract usernames from embedded JSON
+  (likers, commenters, tagged users). These usernames are very likely followers.
+  Returns ~9-30 usernames depending on post engagement. Tested with @official_paul_7814
+  (private account, 78 followers) → 9 usernames extracted.
 - Fallback strategies (require IG credentials): friendships API (IG_SESSION_ID),
   instaloader get_followers() (IG_SESSION_USER/PASS), GraphQL pagination (IG_SESSION_ID).
-- For PRIVATE accounts, IG_SESSION_ID or IG_SESSION_USER + IG_SESSION_PASS must be set.
 - Returns up to 200 usernames per scan. Costs 2 credits.
 - Route: /scrape-followers (deducts 2 credits) → /scrape-followers-result (executes)
 - Results page shows clickable list of follower usernames linking to their IG profiles.
