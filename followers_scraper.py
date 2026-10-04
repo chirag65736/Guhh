@@ -65,7 +65,11 @@ def _strategy_playwright(username, max_followers):
             url = f'https://www.picuki.com/followers/{username}'
             print(f"[*] followers: playwright — loading {url}", flush=True)
 
-            page.goto(url, timeout=30000, wait_until='networkidle')
+            response = page.goto(url, timeout=30000, wait_until='domcontentloaded')
+            if response and response.status >= 400:
+                print(f"[*] followers: public viewer unavailable (HTTP {response.status})", flush=True)
+                browser.close()
+                return []
             page.wait_for_timeout(3000)
 
             # Handle Cloudflare "Just a moment" challenge
@@ -95,7 +99,10 @@ def _strategy_playwright(username, max_followers):
             if len(usernames) > max_followers:
                 usernames = usernames[:max_followers]
 
-            print(f"[✓] followers: playwright → {len(usernames)} usernames", flush=True)
+            if usernames:
+                print(f"[✓] followers: playwright → {len(usernames)} usernames", flush=True)
+            else:
+                print("[*] followers: public viewer returned no accessible usernames", flush=True)
             return usernames
 
     except Exception as e:
@@ -469,10 +476,15 @@ def _strategy_post_pages(username, max_followers):
                 'accept': '*/*',
                 'referer': f'https://www.instagram.com/{username}/',
             },
+            cookies={'sessionid': os.environ['IG_SESSION_ID']} if os.environ.get('IG_SESSION_ID') else {},
             timeout=15,
         )
         if r.status_code != 200:
-            print(f"[-] followers: post_pages — web_profile_info → {r.status_code}", flush=True)
+            if r.status_code in (401, 403, 429):
+                print(f"[*] followers: post pages unavailable — Instagram requires authentication "
+                      f"or is rate-limiting this connection (HTTP {r.status_code})", flush=True)
+            else:
+                print(f"[-] followers: post_pages — web_profile_info → {r.status_code}", flush=True)
             return []
 
         data = r.json()
@@ -628,6 +640,15 @@ def scrape_followers(username, max_followers=200):
         best = max(all_results, key=lambda k: len(all_results[k]))
         print(f"[✓] followers: post_pages got {len(all_results[best])} — skipping API strategies", flush=True)
         return all_results[best]
+
+    # These remaining strategies cannot run without an authorized session.
+    # Do not repeat the same missing-credential attempts over direct and Tor.
+    if not (os.environ.get('IG_SESSION_ID') or os.environ.get('IG_SESSION_USER')):
+        if all_results:
+            return max(all_results.values(), key=len)
+        print("[*] followers: list unavailable — public sources returned no usernames; "
+              "private follower access requires an authorized Instagram session", flush=True)
+        return []
 
     # ── Try direct first, then Tor ──
     for proxy_label, proxies in [('direct', None), ('tor', _get_proxies())]:

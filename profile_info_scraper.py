@@ -300,40 +300,28 @@ def scrape_profile_info(username):
 
     print(f"[*] profile_info: scraping info for @{username}", flush=True)
 
-    # Strategy 1: Web Profile Info API (direct)
-    info = _try_web_profile_info(username, None)
-    if info:
-        return info
+    # Public metadata is often available even when the API requires login.
+    # Try both connections before Instaloader hits the same blocked API again.
+    proxies = _get_proxies()
+    connections = [None] + ([proxies] if proxies else [])
+    for connection in connections:
+        info = _try_html_meta(username, connection)
+        if info:
+            return info
 
-    # Strategy 2: HTML meta tags (direct)
-    info = _try_html_meta(username, None)
-    if info:
-        return info
+    for connection in connections:
+        info = _try_session_api(username, connection)
+        if info:
+            return info
 
-    # Strategy 3: Session API (direct)
-    info = _try_session_api(username, None)
-    if info:
-        return info
+        info = _try_web_profile_info(username, connection)
+        if info:
+            return info
 
-    # Strategy 4: instaloader
+    # Last resort only: avoid delaying a working HTML fallback with API retries.
     info = _try_instaloader(username)
     if info:
         return info
-
-    # Try via Tor proxy if available
-    proxies = _get_proxies()
-    if proxies:
-        info = _try_web_profile_info(username, proxies)
-        if info:
-            return info
-
-        info = _try_html_meta(username, proxies)
-        if info:
-            return info
-
-        info = _try_session_api(username, proxies)
-        if info:
-            return info
 
     print(f"[-] profile_info: all strategies failed for @{username}", flush=True)
     return None

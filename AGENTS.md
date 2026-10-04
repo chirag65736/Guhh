@@ -91,7 +91,8 @@ SQLite DB persists in a named Docker volume (`cipher_data`).
 - **profile_info_scraper.py** — separate scraper for Instagram private account info.
   Extracts: followers, following, total posts, bio, profile picture URL, is_private,
   is_verified, full_name, external_url, category.
-- Uses 4 strategies: web_profile_info API, HTML meta tags, instaloader Profile, session API.
+- Tries HTML metadata direct then via configured proxy before session/web APIs; Instaloader is last. A working proxy metadata result must not be delayed by unauthenticated API failures.
+- Instagram HTTP 401/429 responses are upstream authentication/rate-limit restrictions, not service crashes. Private follower lists require an authorized Instagram session; post commenters/tagged users are not proof of a follower relationship.
 - Costs 1 credit per scan.
 - Route: /scrape-profile-info (deducts 1 credit) → /scrape-profile-info-result (executes)
 - Displays results in a dedicated profile info HTML page with stats cards.
