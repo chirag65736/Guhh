@@ -93,6 +93,26 @@ SQLite DB persists in a named Docker volume (`cipher_data`).
 - Route: /scrape-profile-info (deducts 1 credit) → /scrape-profile-info-result (executes)
 - Displays results in a dedicated profile info HTML page with stats cards.
 
+## Private Posts Scraper
+- **private_posts_scraper.py** — extracts ALL post images from any Instagram
+  profile (including PRIVATE accounts) without login.
+- **Technique**: InstagramPrivSniffer + GraphQL post query approach:
+  1. Get post shortcodes from web_profile_info API (works for private accounts
+     without login, intermittent on datacenter IPs due to rate limiting).
+  2. For each shortcode, use GraphQL query with `doc_id: 27128499623469141`
+     to fetch full media data — ALL carousel images (not just first), highest
+     resolution `image_versions2` candidates, and video URLs.
+  3. Fallback: fetch post page HTML and extract `og:image` meta tag.
+- **Key advantage over stealth_scraper**: gets ALL images from carousel posts
+  (not just the cover image) and highest resolution versions via GraphQL.
+- Can accept pre-fetched shortcodes to avoid duplicate API calls (reuses
+  shortcodes from post_engagement_scraper in the Full Scan workflow).
+- Integrated into Full Scan as "📸 All Posts" tab.
+- Usage: `from private_posts_scraper import scrape_private_posts`
+  Returns list of image URL strings.
+- Tested with @official_paul_7814 (private, 17 posts): 12 image URLs extracted
+  from 3 posts (9 carousel + 1 single + 2 video).
+
 ## Post Engagement Scraper
 - **post_engagement_scraper.py** — extracts per-post engagement data from any
   Instagram profile: like count, comment count, caption, timestamp, display URL,

@@ -216,12 +216,13 @@ from stealth_scraper import scrape_stealth_profile
 from profile_info_scraper import scrape_profile_info
 from followers_scraper import scrape_followers
 from post_engagement_scraper import scrape_post_engagement
+from private_posts_scraper import scrape_private_posts
 
 
-def _generate_combined_html(username, image_urls, profile_info, follower_usernames, post_engagement=None):
+def _generate_combined_html(username, image_urls, profile_info, follower_usernames, post_engagement=None, all_post_urls=None):
     """Generate a single page showing ALL scan results: stealth gallery,
-    profile info, followers list, and post engagement (likes/comments) —
-    combined into one page."""
+    profile info, followers list, post engagement (likes/comments), and
+    all private post images — combined into one page."""
     # ── Profile Info section ──
     info_html = ''
     if profile_info:
@@ -377,6 +378,28 @@ def _generate_combined_html(username, image_urls, profile_info, follower_usernam
             <div class="result-empty">⚠ Could not extract post engagement data.</div>
         </div>"""
 
+    # ── All Posts (private posts via GraphQL) section ──
+    if all_post_urls:
+        all_posts_items = ''
+        for url in all_post_urls:
+            is_vid = '.mp4' in url.lower() or '/video' in url.lower()
+            if is_vid:
+                all_posts_items += f'<div class="gallery-item"><video src="{url}" controls style="width:100%;height:100%;object-fit:cover;"></video><a href="{url}" download class="gallery-dl">⬇</a></div>'
+            else:
+                all_posts_items += f'<div class="gallery-item"><img src="{url}" loading="lazy" alt="post" /><a href="{url}" download class="gallery-dl">⬇</a></div>'
+        all_posts_html = f"""
+        <div class="result-section" id="section-allposts">
+            <div class="section-header" style="color:#00e5ff;">📸 All Posts — {len(all_post_urls)} Images (GraphQL)</div>
+            <div style="font-size:.78rem;color:var(--dim);margin-bottom:16px;font-style:italic;">Extracted via GraphQL post query — includes all carousel images at highest resolution.</div>
+            <div class="gallery-grid">{all_posts_items}</div>
+        </div>"""
+    else:
+        all_posts_html = """
+        <div class="result-section" id="section-allposts">
+            <div class="section-header" style="color:#00e5ff;">📸 All Posts</div>
+            <div class="result-empty">⚠ Could not extract post images (API may be rate limited).</div>
+        </div>"""
+
     return f"""
 <!DOCTYPE html>
 <html lang="en">
@@ -444,6 +467,7 @@ def _generate_combined_html(username, image_urls, profile_info, follower_usernam
         .tab.active[data-tab="stealth"] {{ background:var(--gold); border-color:var(--gold); }}
         .tab.active[data-tab="followers"] {{ background:#7c3aed; border-color:#7c3aed; color:#fff; }}
         .tab.active[data-tab="engagement"] {{ background:#ff6b35; border-color:#ff6b35; color:#05060a; }}
+        .tab.active[data-tab="allposts"] {{ background:var(--cyan); border-color:var(--cyan); color:#05060a; }}
         /* Result sections */
         .result-section {{
             background:rgba(10,13,20,.75); border:1px solid var(--line); border-radius:18px;
@@ -583,12 +607,14 @@ def _generate_combined_html(username, image_urls, profile_info, follower_usernam
             <div class="tab" data-tab="stealth" onclick="showTab('stealth')">🛡 Stealth ({len(image_urls) if image_urls else 0})</div>
             <div class="tab" data-tab="followers" onclick="showTab('followers')">👥 Followers ({len(follower_usernames) if follower_usernames else 0})</div>
             <div class="tab" data-tab="engagement" onclick="showTab('engagement')">📊 Engagement ({len(post_engagement) if post_engagement else 0})</div>
+            <div class="tab" data-tab="allposts" onclick="showTab('allposts')">📸 All Posts ({len(all_post_urls) if all_post_urls else 0})</div>
         </div>
 
         {info_html}
         {gallery_html}
         {followers_html}
         {engagement_html}
+        {all_posts_html}
 
         <div class="footer">
             <div class="brand-mini">Cɪᴘʜᴇʀ</div>
@@ -1033,7 +1059,11 @@ class CipherHandler(http.server.BaseHTTPRequestHandler):
             follower_usernames = scrape_followers(username, max_followers=200)
             print(f"[*]   → Post engagement scan for @{username}", flush=True)
             post_engagement = scrape_post_engagement(username, max_posts=12, enrich_comments=True)
-            html = _generate_combined_html(username, image_urls, profile_info, follower_usernames, post_engagement)
+            print(f"[*]   → All posts (GraphQL) scan for @{username}", flush=True)
+            # Reuse shortcodes from post_engagement to avoid duplicate API call
+            engagement_shortcodes = [p.get('shortcode') for p in post_engagement if p.get('shortcode')]
+            all_post_urls = scrape_private_posts(username, max_posts=20, shortcodes=engagement_shortcodes)
+            html = _generate_combined_html(username, image_urls, profile_info, follower_usernames, post_engagement, all_post_urls)
             html = inject_back_button(html)
             self._serve_html(html)
             return
