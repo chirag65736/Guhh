@@ -1,28 +1,163 @@
-# Base44 Dev Environment
+# AGENTS.md
 
 ## Project Overview
-Cipher is a Python CLI tool that scrapes Instagram profiles for image URLs and
-serves an HTML gallery. The original entry point (`igscrapper.py`) is interactive
-(uses `input()` for the username prompt) and serves on port 8080.
+Instagram profile image scraping tool with a full web app: user auth,
+per-post payments (₹15), monthly plans, gift cards, invoices, and an
+admin panel.  Cyberpunk-themed UI served by Python's built-in HTTP server.
 
-## Running in the Preview
-A web wrapper (`web_server.py`) adapts the tool for the browser preview:
-- Serves a landing page with a username form on **port 3000**
-- On submit, reuses the scraping functions from `igscrapper.py`
-- Returns the gallery HTML (or the "unsuccessful" page if Instagram blocks the request)
+## Architecture
+- **web_server.py** — main entry point; routes all GET/POST endpoints,
+  handles sessions via cookies, auth checks, payment processing.
+- **database.py** — SQLite backend (`data/cipher.db`): users, sessions,
+  payments, gift_cards, invoices.  Auto-creates admin user on first boot.
+- **templates.py** — all HTML pages (landing, login, signup, dashboard,
+  payment with animation, invoice with "chirag" signature, admin panel).
+  Includes inline SVG logo and shared CSS.
+- **igscrapper.py** — original CLI scraper; functions imported by
+  web_server.py for the scraping pipeline (unchanged).
+- **parascode.py** — shim module for igscrapper.py imports.
 
-### Start
-```bash
+## Key Features
+- **Auth**: signup/login with session cookies. Admin: chiragkashyap201@gmail.com / chirag2009
+- **Payments**: ₹15 per post credit, or monthly plans (Basic ₹199, Pro ₹499, Elite ₹999).
+  Simulated payment with premium CSS/JS animation (card flip → spinner → checkmark).
+- **Gift Cards**: admin generates codes (GIFT-XXXXXXXX); users redeem for credits.
+- **Invoices**: auto-generated per payment, with "chirag" signature in Sacramento font.
+- **Admin Panel**: stats (users, revenue, payments, active cards), user/payment/invoice tables.
+- **Logo**: inline SVG hexagon with stylized "C", cyan-magenta gradient.
+
+## Dependencies
+`requests`, `beautifulsoup4`, `lxml`, `html5lib`, `parascode`, `PySocks`
+(see `requirements.txt`).  SQLite is stdlib (no extra dep).
+
+## Running
+```
 docker compose -f docker-compose.base44.yml up -d --build
 ```
+App listens on port 3000 (maps to 8080 inside container). Health check: `GET /`.
+SQLite DB persists in a named Docker volume (`cipher_data`).
 
-### Dependencies
-`requests`, `beautifulsoup4`, `lxml`, `parascode` — installed in the Dockerfile.
+## UPI Payment System
+- **upi_payment.py** — multipart form parser, screenshot saving, UPI ID (gk29052005@ptaxis).
+- **ai_verifier.py** — OpenAI GPT-4o Vision integration; analyzes screenshots and
+  suggests verified/suspicious/rejected. Falls back to 'manual' without OPENAI_API_KEY.
+- UPI is the primary payment method on the payment page (QR code + copy UPI ID).
+- After paying, users submit: sender name, UTR number, payment screenshot.
+- AI analyzes the screenshot and suggests approve/reject; admin makes final call.
+- Screenshots are stored privately in `data/screenshots/` (admin-only via /screenshot).
+- Admin panel shows UPI Payment Verifications section with AI recommendation + approve/reject.
 
-### Notes
-- Instagram blocks datacenter IPs, so scraping from the sandbox will usually return
-  the "unsuccessful" page. This is expected, not a bug.
-- `igscrapper.py` is unchanged; `web_server.py` imports its functions.
-- No live-reload (plain `http.server`); restart the container after code changes:
-  `docker compose -f docker-compose.base44.yml restart web`
-- No external secrets required.
+## Scraper System
+- **igscrapper.py** — main scraper with 3 strategies (tried in order):
+  1. `instagrapi` (private mobile API) — most robust, needs non-flagged IP
+  2. Web API with session cookies — `instagram.com/api/v1/users/web_profile_info/`
+  3. Direct HTML request — original approach, extracts JSON from `<script>` tags
+- All strategies use Tor SOCKS5 proxy (127.0.0.1:9050) if available.
+- `INSTAGRAM_PROXY` env var overrides Tor with a custom proxy (residential recommended).
+- `extract_timeline_data` handles both API JSON and embedded HTML JSON formats.
+- `extract_highest_resolution_urls` handles `image_versions2`, `display_url`, and carousel posts.
+- **alt_scraper.py** — separate alternative scraper using `curl_cffi` (Chrome TLS impersonation) + Tor.
+  Uses a different technique: browser fingerprint impersonation for API + HTML scraping.
+  Run standalone: `python alt_scraper.py official_paul_7814`
+- Instagram blocks datacenter IPs (429/login redirect); success depends on Tor exit node.
+- Scrape takes ~30-40s due to multiple strategy attempts through Tor.
+
+## Stealth Scraper
+- **stealth_scraper.py** — multi-strategy private profile scraper, SEPARATE from
+  igscrapper.py and private_scraper.py. Combines techniques from 7 strategies:
+  1. obitouka/InstagramPrivSniffer — curl_cffi Chrome impersonation + regex post-code
+     extraction from profile HTML + GraphQL media fetch for individual posts.
+  2. arcanecfg/Instagram-Private-Scraper — ?__a=1 JSON endpoint + max_id pagination.
+  3. drawrowfly/instagram-scraper — GraphQL query-hash pagination (user hash
+     003056d32c2554def87228bc3fd9668a) with csrftoken cookies.
+  4. SREEHARI1994/InstagramScraper — instagrapi session-based login for truly private
+     accounts (needs IG_SESSION_USER and IG_SESSION_PASS env vars).
+  5. instaloader/instaloader — iterates ALL posts via Profile.get_posts() lazy iterator.
+     Gets the most posts (no hard limit). Best for extracting every single post.
+  6. web_profile_info API — uses Instagram's web_profile_info API + GraphQL pagination
+     (same approach as private_scraper.py). Most reliable for direct connection.
+  7. kevmaindev/Instagram-Followers-Scraper_Suite — session-based API using IG_SESSION_ID
+     cookie + friendships endpoint for private accounts.
+- Tries ALL strategies and returns the result from whichever scraper found the MOST posts
+  (not first-success-wins). Skips Tor if direct already found >=5 posts.
+- Costs 3 credits per scan, finds up to 80 posts.
+- Route: /scrape-stealth (deducts 3 credits) → /scrape-stealth-result (executes scrape)
+- Strategies run concurrently with a 45-second collection deadline; return the largest completed result. Executor shutdown must use `wait=False`: a context manager waits for running strategies even after cancellation.
+- Loading-page scripts are emitted in the document head: initialize controls inside `DOMContentLoaded`, not a head-level IIFE. Stealth requests time out after 65 seconds, Full Scan after 90 seconds, other scans after 240 seconds — each with a visible error/back button.
+- Full Scan (`/scrape-all-result`) now uses `full_scan.py`, NOT six concurrent standalone scrapers (their duplicate requests worsened 401/429 blocks). One shared HTML/API profile fetch supplies info, engagement and media; each post GraphQL response feeds BOTH image/video tabs. Requests are spaced by at least one second, have at most eight-second timeouts and share a 55-second budget, without orphaned background tasks. The existing configured proxy is the only HTML fallback; cooldowns are per connection/endpoint/session, respect Retry-After and stop repeated 401/403/429 requests. Results are cached for five minutes (empty results for one minute), with a bounded 128-entry cache; one Full Scan runs at a time. Partial/cached/blocked results have explicit notices. Only an authorized friendships response populates followers, never commenters. Standalone scan modes are unchanged. Cache/cooldown state resets on service restart.
+- Full Scan post collection lives in `full_scan_posts.py`: merge HTML/API nodes by post key, paginate timeline cursors (or an authorized session feed), with no 20-post/12-engagement cap. All discovered media is processed before optional per-post enrichment; complete carousel/video nodes skip redundant detail requests. Relay `display_uri` is supported. Private timelines are not paginated without `IG_SESSION_ID`; Instagram must grant that session permission. Results report available post count versus profile count, not carousel image count as posts. A 55-second budget can still produce explicitly partial results; a profile count alone is never proof all media was retrieved.
+- **2026-10 Relay extraction fix**: Instagram's profile page HTML now embeds posts in `polaris_ordered_timeline_connection` (not `edge_owner_to_timeline_media`). Post nodes use `code` (not `shortcode`), `display_uri` (not `display_url`), and have no `owner` field. `_html_data` now explicitly extracts from `polaris_ordered_timeline_connection` and maps it to `edge_owner_to_timeline_media` so `collect_posts` can use it. GraphQL media detail requests must include `__relay_internal__pv__PolarisAIGMMediaWebLabelEnabledrelayprovider: False` in variables or Instagram returns a CRITICAL execution error. `_media` null-guards `video_versions` and `image_versions2` (GraphQL returns `null`, not `[]`). Profile post count falls back to og:description metadata when `edge_owner_to_timeline_media.count` is 0/missing. Tested with @official_paul_7814 (private, 17 posts): 13 images + 1 video from 3 public preview posts (9 carousel + 1 single + 1 video).
+- Full Scan engagement is normalized in `full_scan_engagement.py`; only explicit liker edges/API users count as likers and only friendship responses count as followers. Comment usernames/text come from explicit comment edges and paginated comments responses. Never use a page-wide username regex as proof of liking/following. Authorized feed pagination is preferred over the legacy query hash, sparse merges retain richer carousel records, and Relay owners can be matched by profile ID. The final portion of the 55-second budget is reserved for follower/engagement requests; partial/media-empty results cache for only 60 seconds. The result UI shows every fetched liker/comment username, not only the first 12/5. Regression tests: `docker compose -f docker-compose.base44.yml exec -T web python -m unittest discover -s tests -p 'test_full_scan.py' -v`. These mocked tests do not prove upstream access; live completeness requires a valid user-provided `IG_SESSION_ID` and Instagram permission.
+- Profile-info Instaloader uses one connection attempt and a 10-second request timeout; default 429 retries otherwise sleep for many minutes and block Full Scan.
+- Optional env vars: IG_SESSION_USER, IG_SESSION_PASS, IG_SESSION_ID
+
+## Profile Info Scraper
+- **profile_info_scraper.py** — separate scraper for Instagram private account info.
+  Extracts: followers, following, total posts, bio, profile picture URL, is_private,
+  is_verified, full_name, external_url, category.
+- Tries HTML metadata direct then via configured proxy before session/web APIs; Instaloader is last. A working proxy metadata result must not be delayed by unauthenticated API failures.
+- Instagram HTTP 401/429 responses are upstream authentication/rate-limit restrictions, not service crashes. Private follower lists require an authorized Instagram session; post commenters/tagged users are not proof of a follower relationship.
+- Costs 1 credit per scan.
+- Route: /scrape-profile-info (deducts 1 credit) → /scrape-profile-info-result (executes)
+- Displays results in a dedicated profile info HTML page with stats cards.
+
+## Private Posts Scraper
+- **private_posts_scraper.py** — extracts ALL post images from any Instagram
+  profile (including PRIVATE accounts) without login.
+- **Technique**: InstagramPrivSniffer + GraphQL post query approach:
+  1. Get post shortcodes from web_profile_info API (works for private accounts
+     without login, intermittent on datacenter IPs due to rate limiting).
+  2. For each shortcode, use GraphQL query with `doc_id: 27128499623469141`
+     to fetch full media data — ALL carousel images (not just first), highest
+     resolution `image_versions2` candidates, and video URLs.
+  3. Fallback: fetch post page HTML and extract `og:image` meta tag.
+- **Key advantage over stealth_scraper**: gets ALL images from carousel posts
+  (not just the cover image) and highest resolution versions via GraphQL.
+- Can accept pre-fetched shortcodes to avoid duplicate API calls (reuses
+  shortcodes from post_engagement_scraper in the Full Scan workflow).
+- Integrated into Full Scan as "📸 All Posts" tab.
+- Usage: `from private_posts_scraper import scrape_private_posts`
+  Returns list of image URL strings.
+- Tested with @official_paul_7814 (private, 17 posts): 12 image URLs extracted
+  from 3 posts (9 carousel + 1 single + 2 video).
+
+## Post Engagement Scraper
+- **post_engagement_scraper.py** — extracts per-post engagement data from any
+  Instagram profile: like count, comment count, caption, timestamp, display URL,
+  and (optionally) actual comment text + liker usernames.
+- Uses the web_profile_info API (no login needed, works for public AND private
+  accounts) to get the post list with engagement counts.
+- Optionally enriches up to 8 posts with Playwright: loads each post page to
+  extract comment text (username + text) and liker usernames from embedded JSON.
+- Integrated exclusively into the Full Scan (All-in-One) workflow as a new
+  "📊 Engagement" tab showing per-post cards with likes, comments, captions,
+  comment text, and liker chips.
+- Usage: `from post_engagement_scraper import scrape_post_engagement`
+  Returns list of dicts: `{shortcode, caption, like_count, comment_count,
+  timestamp, display_url, is_video, comments: [{username, text}], likers: [str]}`
+
+## Followers Scraper
+- **followers_scraper.py** — extracts follower USERNAMES (not just count) from any
+  Instagram profile.
+- **Primary strategy: Playwright + picuki/tikvib** — uses headless Chromium to load
+  picuki.com/followers/{username}, a public IG viewer that shows follower lists
+  without Instagram login. Playwright handles Cloudflare's JS challenge automatically.
+  Returns ~30 usernames per scan. Works for PUBLIC accounts without any credentials.
+- **Post-page strategy (works for PRIVATE accounts without login!)**: uses the
+  web_profile_info API (direct connection, no auth needed) to get post shortcodes,
+  then loads each post page with Playwright to extract usernames from embedded JSON
+  (likers, commenters, tagged users). These usernames are very likely followers.
+  Returns ~9-30 usernames depending on post engagement. Tested with @official_paul_7814
+  (private account, 78 followers) → 9 usernames extracted.
+- Fallback strategies (require IG credentials): friendships API (IG_SESSION_ID),
+  instaloader get_followers() (IG_SESSION_USER/PASS), GraphQL pagination (IG_SESSION_ID).
+- Returns up to 200 usernames per scan. Costs 2 credits.
+- Route: /scrape-followers (deducts 2 credits) → /scrape-followers-result (executes)
+- Results page shows clickable list of follower usernames linking to their IG profiles.
+- Playwright + Chromium are installed via Dockerfile.base44 (build step, not per-start).
+
+## Notes
+- Instagram blocks datacenter IPs; scraper relies on Tor exit nodes (may fail if flagged).
+- Set `INSTAGRAM_PROXY` to a residential proxy for reliable scraping.
+- OPENAI_API_KEY is optional — without it, UPI submissions default to manual admin review.
+- No live-reload dev server; call `reload_preview` after code changes.
