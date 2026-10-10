@@ -421,6 +421,78 @@ textarea:focus { border-color:var(--cyan); box-shadow:0 0 0 3px rgba(0,229,255,.
     .btn { padding: 10px 16px; font-size: .72rem; }
     .stats-grid { grid-template-columns: 1fr; }
 }
+/* ── Apple "Liquid Glass" layer ─────────────────────────────── */
+:root {
+    --glass-bg: rgba(16, 21, 33, .55);
+    --glass-hi: rgba(255, 255, 255, .10);
+    --glass-lo: rgba(255, 255, 255, .02);
+    --glass-edge: rgba(255, 255, 255, .18);
+}
+/* fluid liquid gradient drifting behind everything */
+body::after {
+    content: ''; position: fixed; inset: -20%; z-index: 0; pointer-events: none;
+    background:
+        radial-gradient(40% 55% at 20% 30%, rgba(0,229,255,.18), transparent 60%),
+        radial-gradient(45% 50% at 80% 70%, rgba(255,43,214,.16), transparent 60%),
+        radial-gradient(35% 45% at 55% 15%, rgba(124,58,237,.14), transparent 60%);
+    filter: blur(30px) saturate(140%);
+    animation: liquidFlow 22s ease-in-out infinite alternate;
+}
+@keyframes liquidFlow {
+    0%   { transform: translate3d(0, 0, 0) scale(1); }
+    50%  { transform: translate3d(3%, -2%, 0) scale(1.08); }
+    100% { transform: translate3d(-2%, 3%, 0) scale(1.04); }
+}
+/* glass surfaces with a soft specular sheen */
+.card, .plan-card, .review-card, .stat-card, .invoice, .nav {
+    background: linear-gradient(160deg, var(--glass-hi), var(--glass-lo)), var(--glass-bg) !important;
+    border: 1px solid var(--glass-edge);
+    -webkit-backdrop-filter: blur(22px) saturate(160%);
+    backdrop-filter: blur(22px) saturate(160%);
+    box-shadow:
+        inset 0 1px 0 rgba(255,255,255,.14),
+        inset 0 -1px 0 rgba(255,255,255,.03),
+        0 24px 60px rgba(0,0,0,.55);
+    position: relative;
+    overflow: hidden;
+}
+.card::after, .plan-card::after, .review-card::after, .stat-card::after {
+    content: ''; position: absolute; top: 0; left: -60%; width: 40%; height: 100%;
+    background: linear-gradient(105deg, transparent, rgba(255,255,255,.10), transparent);
+    transform: skewX(-18deg);
+    animation: glassSheen 7s ease-in-out infinite;
+    pointer-events: none;
+}
+@keyframes glassSheen {
+    0%, 55% { left: -60%; }
+    75% { left: 130%; }
+    100% { left: 130%; }
+}
+/* Apple-style springy press + hover feedback */
+.btn, .plan-card, .review-card, .stat-card, .tab, .gallery-item, .follower-item {
+    transition: transform .35s cubic-bezier(.34,1.56,.64,1), box-shadow .35s ease, border-color .35s ease, filter .3s ease;
+    will-change: transform;
+}
+.btn:hover { transform: translateY(-2px) scale(1.02); }
+.btn:active { transform: scale(.96); transition-duration: .1s; }
+.plan-card:hover, .review-card:hover { transform: translateY(-6px) scale(1.01); }
+.gallery-item:active, .follower-item:active { transform: scale(.97); }
+.btn-primary { box-shadow: 0 10px 30px rgba(0,229,255,.28), inset 0 1px 0 rgba(255,255,255,.35); }
+/* liquid entrance for page content */
+.page > * { animation: liquidIn .7s cubic-bezier(.22,1,.36,1) both; }
+.page > *:nth-child(2) { animation-delay: .06s; }
+.page > *:nth-child(3) { animation-delay: .12s; }
+.page > *:nth-child(4) { animation-delay: .18s; }
+.page > *:nth-child(5) { animation-delay: .24s; }
+.page > *:nth-child(6) { animation-delay: .30s; }
+@keyframes liquidIn {
+    0% { opacity: 0; transform: translateY(22px) scale(.98); filter: blur(6px); }
+    60% { filter: blur(0); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+    body::after, .card::after, .plan-card::after, .review-card::after, .stat-card::after, .page > * { animation: none !important; }
+}
 """
 
 # ── Logo SVG ──────────────────────────────────────────────────

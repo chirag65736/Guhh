@@ -161,3 +161,17 @@ SQLite DB persists in a named Docker volume (`cipher_data`).
 - Set `INSTAGRAM_PROXY` to a residential proxy for reliable scraping.
 - OPENAI_API_KEY is optional — without it, UPI submissions default to manual admin review.
 - No live-reload dev server; call `reload_preview` after code changes.
+- All scrapers verified live through Tor with @official_paul_7814 (Oct 2026):
+  profile info (76 followers / 96 following / 17 posts), private posts (30 URLs),
+  stealth (21 posts), followers (47 usernames), engagement (12 posts), full scan.
+- **Strategy 8 — `_strategy_profile_full`** (added): one profile-page request that
+  returns BOTH account details (followers/following/posts, bio, full name,
+  private/verified, avatar) AND post image URLs. Details are cached in
+  `_LAST_PROFILE_DETAILS` and read via `get_last_profile_details(username)`.
+  Follower counts fall back to the `og:description` meta tag when the logged-out
+  JSON omits them; bio/full-name escapes are decoded with `_unescape`.
+  `/scrape-stealth-result` renders `_generate_stealth_html` (details + gallery).
+- **Apple "Liquid Glass" UI layer** (added to `SHARED_CSS`): drifting liquid
+  gradient (`body::after` / `liquidFlow`), frosted glass surfaces with a moving
+  specular sheen (`glassSheen`), springy press/hover transitions and a
+  `liquidIn` page entrance. Respects `prefers-reduced-motion`.

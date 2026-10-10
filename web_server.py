@@ -211,8 +211,137 @@ def _generate_profile_info_html(info, username):
 </body>
 </html>
     """
+def _generate_stealth_html(username, image_urls, details):
+    """Stealth result page: private-account details + extracted posts gallery."""
+    d = details or {}
+
+    def _fmt(v):
+        return f"{v:,}" if isinstance(v, int) else (v if v not in (None, '') else '?')
+
+    full_name = escape(d.get('full_name', '') or '')
+    bio = escape(d.get('bio', '') or '')
+    pic = d.get('profile_pic_url', '') or ''
+    is_private = d.get('is_private', False)
+    is_verified = d.get('is_verified', False)
+
+    pic_html = f'<img src="{pic}" alt="Profile" style="width:84px;height:84px;border-radius:50%;border:2px solid var(--cyan);object-fit:cover;" />' if pic else ''
+    verified = ' <span style="color:var(--cyan);">✓</span>' if is_verified else ''
+    priv_badge = '<span class="s-badge priv">🔒 Private</span>' if is_private else '<span class="s-badge pub">🌐 Public</span>'
+    bio_html = f'<div style="font-size:.82rem;color:var(--dim);margin-top:10px;font-style:italic;">{bio}</div>' if bio else ''
+
+    gallery = ''
+    for url in image_urls:
+        gallery += f'<div class="s-gallery-item"><img src="{url}" loading="lazy" alt="post" /><a href="{url}" download class="s-gallery-dl">⬇</a></div>'
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cɪᴘʜᴇʀ · Stealth Scan — @{username}</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        * {{ margin:0; padding:0; box-sizing:border-box; }}
+        :root {{
+            --bg-0:#05060a; --bg-1:#0a0d14; --line:rgba(0,255,255,.15);
+            --cyan:#00e5ff; --magenta:#ff2bd6; --green:#00ff9c; --gold:#ffd700; --text:#e6f1ff; --dim:#7a8aa3;
+        }}
+        body {{
+            font-family:'Inter',sans-serif; background:var(--bg-0); color:var(--text);
+            min-height:100vh; padding:24px 18px;
+            background-image:radial-gradient(circle at 15% 10%,rgba(0,229,255,.10),transparent 45%),radial-gradient(circle at 85% 90%,rgba(255,43,214,.10),transparent 45%),linear-gradient(180deg,#05060a 0%,#0a0d14 100%);
+            background-attachment:fixed;
+        }}
+        body::before {{
+            content:''; position:fixed; inset:0;
+            background-image:linear-gradient(rgba(0,229,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,255,.035) 1px,transparent 1px);
+            background-size:40px 40px; pointer-events:none; z-index:0;
+        }}
+        .container {{ position:relative; z-index:1; max-width:900px; margin:0 auto; }}
+        .header {{ text-align:center; margin-bottom:24px; }}
+        .brand {{
+            font-family:'JetBrains Mono',monospace; font-size:2.2rem; font-weight:800;
+            letter-spacing:4px; background:linear-gradient(90deg,var(--cyan),var(--magenta));
+            -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
+            text-shadow:0 0 40px rgba(0,229,255,.35); margin-bottom:6px;
+        }}
+        .brand-sub {{ font-family:'JetBrains Mono',monospace; font-size:.72rem; color:var(--dim); letter-spacing:6px; text-transform:uppercase; }}
+        .glass {{
+            background:linear-gradient(160deg,rgba(255,255,255,.10),rgba(255,255,255,.02)),rgba(16,21,33,.55);
+            border:1px solid rgba(255,255,255,.18); border-radius:18px; padding:26px 22px; margin-bottom:22px;
+            -webkit-backdrop-filter:blur(22px) saturate(160%); backdrop-filter:blur(22px) saturate(160%);
+            box-shadow:inset 0 1px 0 rgba(255,255,255,.14),0 24px 60px rgba(0,0,0,.55);
+            animation:liquidIn .7s cubic-bezier(.22,1,.36,1) both;
+        }}
+        @keyframes liquidIn {{ 0%{{opacity:0;transform:translateY(22px) scale(.98);filter:blur(6px);}} 100%{{opacity:1;transform:translateY(0) scale(1);filter:blur(0);}} }}
+        .profile-row {{ display:flex; align-items:center; gap:16px; flex-wrap:wrap; justify-content:center; text-align:center; }}
+        .full-name {{ font-family:'JetBrains Mono',monospace; font-size:1.15rem; font-weight:700; }}
+        .uname {{ font-family:'JetBrains Mono',monospace; font-size:.85rem; color:var(--cyan); }}
+        .s-badge {{ display:inline-block; margin-top:6px; font-family:'JetBrains Mono',monospace; font-size:.68rem; letter-spacing:1px; padding:4px 12px; border-radius:20px; }}
+        .s-badge.priv {{ color:var(--magenta); border:1px solid rgba(255,43,214,.5); background:rgba(255,43,214,.08); }}
+        .s-badge.pub {{ color:var(--green); border:1px solid rgba(0,255,156,.5); background:rgba(0,255,156,.08); }}
+        .mini-stats {{ display:flex; justify-content:center; gap:30px; margin-top:18px; flex-wrap:wrap; }}
+        .mini-stat {{ display:flex; flex-direction:column; align-items:center; gap:4px; }}
+        .mini-num {{ font-family:'JetBrains Mono',monospace; font-size:1.6rem; font-weight:800; color:var(--cyan); }}
+        .mini-lbl {{ font-family:'JetBrains Mono',monospace; font-size:.66rem; color:var(--dim); letter-spacing:2px; text-transform:uppercase; }}
+        .sec-title {{ font-family:'JetBrains Mono',monospace; font-size:1rem; font-weight:800; letter-spacing:2px; color:var(--gold); margin-bottom:16px; padding-bottom:10px; border-bottom:1px solid var(--line); }}
+        .s-gallery {{ display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:14px; }}
+        .s-gallery-item {{ position:relative; border-radius:12px; overflow:hidden; border:1px solid var(--line); aspect-ratio:1; background:var(--bg-1); transition:transform .35s cubic-bezier(.34,1.56,.64,1); }}
+        .s-gallery-item:hover {{ transform:translateY(-4px) scale(1.02); }}
+        .s-gallery-item img {{ width:100%; height:100%; object-fit:cover; display:block; }}
+        .s-gallery-dl {{ position:absolute; bottom:8px; right:8px; width:32px; height:32px; border-radius:50%; background:rgba(0,229,255,.9); color:#05060a; display:flex; align-items:center; justify-content:center; text-decoration:none; font-weight:800; opacity:0; transition:opacity .25s; }}
+        .s-gallery-item:hover .s-gallery-dl {{ opacity:1; }}
+        .empty {{ text-align:center; padding:30px; color:var(--dim); font-size:.88rem; }}
+        .footer {{ text-align:center; margin-top:26px; padding-top:18px; border-top:1px solid var(--line); color:var(--dim); font-size:.8rem; }}
+        .footer .made {{ font-family:'JetBrains Mono',monospace; font-size:.72rem; color:var(--magenta); margin-top:4px; letter-spacing:1px; }}
+        @media(max-width:600px) {{
+            .s-gallery {{ grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:10px; }}
+            .brand {{ font-size:1.8rem; letter-spacing:2px; }}
+            .mini-stats {{ gap:20px; }}
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="brand">Cɪᴘʜᴇʀ</div>
+            <div class="brand-sub">Stealth Scan — Details + Posts</div>
+        </div>
+
+        <div class="glass">
+            <div class="profile-row">
+                {pic_html}
+                <div>
+                    <div class="full-name">{full_name}{verified}</div>
+                    <div class="uname">@{username}</div>
+                    <div>{priv_badge}</div>
+                </div>
+            </div>
+            {bio_html}
+            <div class="mini-stats">
+                <div class="mini-stat"><span class="mini-num">{_fmt(d.get('followers'))}</span><span class="mini-lbl">Followers</span></div>
+                <div class="mini-stat"><span class="mini-num">{_fmt(d.get('following'))}</span><span class="mini-lbl">Following</span></div>
+                <div class="mini-stat"><span class="mini-num">{_fmt(d.get('posts'))}</span><span class="mini-lbl">Posts</span></div>
+            </div>
+        </div>
+
+        <div class="glass">
+            <div class="sec-title">🛡 Extracted Posts — {len(image_urls)}</div>
+            {f'<div class="s-gallery">{gallery}</div>' if image_urls else '<div class="empty">⚠ No posts extracted.</div>'}
+        </div>
+
+        <div class="footer">
+            <div>Cɪᴘʜᴇʀ · Stealth Scan</div>
+            <div class="made">◈ Made by Ryon · CipherXPortal ◈</div>
+        </div>
+    </div>
+</body>
+</html>
+    """
+
+
 from private_scraper import scrape_private_profile
-from stealth_scraper import scrape_stealth_profile
+from stealth_scraper import scrape_stealth_profile, get_last_profile_details
 from profile_info_scraper import scrape_profile_info
 from followers_scraper import scrape_followers
 from post_engagement_scraper import scrape_post_engagement
@@ -1178,10 +1307,11 @@ class CipherHandler(http.server.BaseHTTPRequestHandler):
                 return
             print(f"[*] Stealth scan executing for @{username}", flush=True)
             image_urls = scrape_stealth_profile(username, max_posts=80)
-            if not image_urls:
+            details = get_last_profile_details(username)
+            if not image_urls and not details:
                 html = generate_unsuccessful_html(username)
             else:
-                html = generate_gallery_html(image_urls, username)
+                html = _generate_stealth_html(username, list(image_urls.values()), details)
             html = inject_back_button(html)
             self._serve_html(html)
             return

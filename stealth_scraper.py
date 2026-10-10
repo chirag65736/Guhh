@@ -1042,6 +1042,136 @@ def _strategy_session_api(username, proxies, max_posts):
 
 
 # ═══════════════════════════════════════════════════════════════════════
+#  Strategy 8 — Profile Details + Posts (full profile-page parse)
+#  Single request that extracts BOTH the account details (followers,
+#  following, post count, bio, full name, private/verified, avatar) AND
+#  every post image URL from the profile page's embedded data. Gives the
+#  most complete picture of a private account in one shot.
+# ═══════════════════════════════════════════════════════════════════════
+
+_LAST_PROFILE_DETAILS = {}
+
+
+def get_last_profile_details(username):
+    """Return the account details captured by the last profile_full scan."""
+    return _LAST_PROFILE_DETAILS.get(username.lstrip('@').strip(), {})
+
+
+def _unescape(s):
+    """Best-effort decode of JSON/unicode escapes in a captured string.
+
+    Handles surrogate pairs (emoji) by round-tripping through UTF-16.
+    """
+    if not s:
+        return s
+    try:
+        return (
+            s.encode('utf-8')
+            .decode('unicode_escape')
+            .encode('utf-16', 'surrogatepass')
+            .decode('utf-16')
+        )
+    except Exception:
+        return s
+
+
+def _parse_profile_details(page):
+    """Extract account details from the profile page's embedded JSON."""
+    def _num(pattern, text):
+        m = re.search(pattern, text)
+        return int(m.group(1).replace(',', '')) if m else None
+
+    def _str(pattern):
+        m = re.search(pattern, page)
+        return _clean_url(m.group(1)) if m else ''
+
+    def _bool(pattern):
+        m = re.search(pattern, page)
+        return m.group(1) == 'true' if m else False
+
+    # Logged-out profile pages often omit the follower counts from JSON but
+    # carry them in the og:description meta tag — use that as a fallback.
+    meta = ''
+    mm = re.search(r'<meta[^>]+property="og:description"[^>]+content="([^"]*)"', page)
+    if not mm:
+        mm = re.search(r'<meta[^>]+content="([^"]*)"[^>]+property="og:description"', page)
+    if mm:
+        meta = mm.group(1)
+
+    followers = _num(r'"edge_followed_by"\s*:\s*\{\s*"count"\s*:\s*(\d+)', page)
+    if followers is None:
+        followers = _num(r'([\d,]+)\s*Followers', meta)
+    following = _num(r'"edge_follow"\s*:\s*\{\s*"count"\s*:\s*(\d+)', page)
+    if following is None:
+        following = _num(r'([\d,]+)\s*Following', meta)
+    posts = _num(r'"edge_owner_to_timeline_media"\s*:\s*\{\s*"count"\s*:\s*(\d+)', page)
+    if posts is None:
+        posts = _num(r'([\d,]+)\s*Posts', meta)
+
+    return {
+        'followers': followers,
+        'following': following,
+        'posts': posts,
+        'full_name': _unescape(_str(r'"full_name"\s*:\s*"([^"]*)"')),
+        'bio': _unescape(_str(r'"biography"\s*:\s*"([^"]*)"')),
+        'is_private': _bool(r'"is_private"\s*:\s*(true|false)'),
+        'is_verified': _bool(r'"is_verified"\s*:\s*(true|false)'),
+        'profile_pic_url': _str(r'"profile_pic_url_hd"\s*:\s*"([^"]*)"') or _str(r'"profile_pic_url"\s*:\s*"([^"]*)"'),
+    }
+
+
+def _strategy_profile_full(username, proxies, max_posts):
+    """Fetch the profile page once → account details + all post image URLs."""
+    from curl_cffi import requests as cffi_req
+
+    try:
+        session = cffi_req.Session()
+        session.get('https://www.instagram.com/', impersonate='chrome', proxies=proxies, timeout=12)
+        r = session.get(
+            f'https://www.instagram.com/{username}/',
+            impersonate='chrome', proxies=proxies, timeout=15,
+        )
+        if r.status_code != 200 or '/accounts/login/' in r.url:
+            print(f"[-] stealth: profile_full → {r.status_code}", flush=True)
+            return {}
+
+        page = r.text
+        details = _parse_profile_details(page)
+        _LAST_PROFILE_DETAILS[username] = details
+        print(
+            f"[*] stealth: profile_full → @{username} "
+            f"followers={details.get('followers')} posts={details.get('posts')} "
+            f"private={details.get('is_private')}",
+            flush=True,
+        )
+
+        # Extract this profile's post images from the embedded data.
+        urls = {}
+        owner_tag = f'"username":"{username}"'
+        for script in re.findall(r'data-sjs[^>]*>(.*?)</script>', page, re.DOTALL):
+            if 'display_uri' not in script:
+                continue
+            if owner_tag not in script.replace(' ', ''):
+                continue
+            for m in re.finditer(r'"display_uri"\s*:\s*"([^"]+)"', script):
+                cleaned = _clean_url(m.group(1))
+                if cleaned:
+                    urls[f"pf_{len(urls)}_{_secrets.token_hex(3)}"] = cleaned
+            if urls:
+                break
+
+        if len(urls) > max_posts:
+            urls = dict(list(urls.items())[:max_posts])
+
+        print(f"[✓] stealth: profile_full → {len(urls)} image URLs", flush=True)
+        return urls
+
+    except Exception as e:
+        print(f"[-] stealth: profile_full error: {e}", flush=True)
+        return {}
+
+
+# ═══════════════════════════════════════════════════════════════════════
 #  Main entry point — tries ALL strategies, returns the one with MOST posts
 # ═══════════════════════════════════════════════════════════════════════
 
@@ -1081,6 +1211,7 @@ def scrape_stealth_profile(username, max_posts=60):
         if proxies is None and proxy_label == 'tor':
             continue
         tag = '' if proxy_label == 'direct' else f'/{proxy_label}'
+        tasks.append((f'profile_full{tag}', lambda p=proxies: _strategy_profile_full(username, p, max_posts)))
         tasks.append((f'web_api{tag}', lambda p=proxies: _strategy_web_api(username, p, max_posts)))
         tasks.append((f'obitouka{tag}', lambda p=proxies: _strategy_obitouka(username, p, max_posts)))
         tasks.append((f'arcanecfg{tag}', lambda p=proxies: _strategy_arcanecfg(username, p, max_posts)))
